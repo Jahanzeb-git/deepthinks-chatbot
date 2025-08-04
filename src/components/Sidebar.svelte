@@ -4,6 +4,7 @@
   import { historyStore, type HistoryItem } from '../stores/history';
   import { authStore } from '../stores/auth';
   import { isSidebarExpanded } from '../stores/sidebar';
+  import { aboutModalStore } from '../stores/about';
   import { truncateText, formatTimestamp } from '../lib/utils';
   
   const dispatch = createEventDispatcher<{
@@ -86,11 +87,11 @@
     
     <!-- Bottom Actions -->
     <div class="bottom-actions">
-      <a 
-        href="/about"
+      <button 
         class="action-btn"
         class:expanded={$isSidebarExpanded}
         title="About"
+        on:click={() => aboutModalStore.openModal()}
       >
         <div class="btn-icon">
           <Info size={$isSidebarExpanded ? 18 : 20} />
@@ -98,7 +99,7 @@
         {#if $isSidebarExpanded}
           <span class="btn-text">About</span>
         {/if}
-      </a>
+      </button>
     </div>
     </div>
   </aside>

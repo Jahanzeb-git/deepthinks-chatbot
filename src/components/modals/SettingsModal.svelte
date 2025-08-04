@@ -4,7 +4,7 @@
   import { authStore } from '../../stores/auth'; // IMPORT THE AUTH STORE
   import Modal from './Modal.svelte';
   import Toggle from '../shared/Toggle.svelte';
-  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles } from 'lucide-svelte';
+  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft } from 'lucide-svelte';
   import DataControlModal from './DataControlModal.svelte';
   import { get } from 'svelte/store';
   import { tick } from 'svelte';
@@ -17,7 +17,6 @@
   let showDeleteChatsModal = false;
   let showDeleteAccountModal = false;
   let isDataModalOpen = false;
-  let isMobileMenuOpen = false;
   let isDeletingAccount = false;
 
   const sections = {
@@ -25,8 +24,52 @@
     Account: { icon: KeyRound, description: 'Profile & security' },
     'Data Control': { icon: Database, description: 'Privacy & data management' },
   };
-
+  const sectionKeys = Object.keys(sections);
   let activeTab = 'General';
+
+  // Swipe navigation logic
+  let touchStartX = 0;
+  let touchEndX = 0;
+
+  function handleTouchStart(e: TouchEvent) {
+    touchStartX = e.touches[0].clientX;
+    touchEndX = e.touches[0].clientX; // Reset on new touch
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    touchEndX = e.touches[0].clientX;
+  }
+
+  function handleTouchEnd() {
+    const swipeDistance = touchEndX - touchStartX;
+    const minSwipeDistance = 50; // Minimum distance for a swipe
+
+    if (Math.abs(swipeDistance) < minSwipeDistance) {
+      return;
+    }
+
+    if (swipeDistance < 0) {
+      // Swipe left for next
+      nextTab();
+    } else {
+      // Swipe right for previous
+      prevTab();
+    }
+  }
+
+  function nextTab() {
+    const currentIndex = sectionKeys.indexOf(activeTab);
+    if (currentIndex < sectionKeys.length - 1) {
+      activeTab = sectionKeys[currentIndex + 1];
+    }
+  }
+
+  function prevTab() {
+    const currentIndex = sectionKeys.indexOf(activeTab);
+    if (currentIndex > 0) {
+      activeTab = sectionKeys[currentIndex - 1];
+    }
+  }
   
   settingsStore.subscribe(store => {
     if (!isNameSaving && document.activeElement?.id !== 'what_we_call_you_input') {
@@ -82,7 +125,6 @@
 
   function switchTab(tab: string) {
     activeTab = tab;
-    isMobileMenuOpen = false;
   }
 </script>
 
@@ -99,43 +141,13 @@
 
     <!-- Mobile Tab Selector -->
     <div class="mobile-tab-selector">
-      <button class="mobile-tab-trigger" on:click={() => isMobileMenuOpen = !isMobileMenuOpen}>
-        <div class="mobile-tab-content">
-          <div class="mobile-tab-icon">
-            <svelte:component this={sections[activeTab].icon} size={20} />
-          </div>
-          <div class="mobile-tab-text">
-            <span class="mobile-tab-title">{activeTab}</span>
-            <span class="mobile-tab-desc">{sections[activeTab].description}</span>
-          </div>
-        </div>
-        <div class="mobile-chevron" class:rotated={isMobileMenuOpen}>
-          <ChevronRight size={18} />
-        </div>
-      </button>
-      
-      {#if isMobileMenuOpen}
-        <div class="mobile-dropdown">
-          {#each Object.entries(sections) as [sectionName, { icon, description }]}
-            <button 
-              class="mobile-dropdown-item"
-              class:active={activeTab === sectionName}
-              on:click={() => switchTab(sectionName)}
-            >
-              <div class="mobile-dropdown-icon">
-                <svelte:component this={icon} size={20} />
-              </div>
-              <div class="mobile-dropdown-text">
-                <span class="mobile-dropdown-title">{sectionName}</span>
-                <span class="mobile-dropdown-desc">{description}</span>
-              </div>
-            </button>
-          {/each}
-        </div>
-      {/if}
+      <div class="mobile-header">
+        <h3 class="mobile-title">{activeTab}</h3>
+        <p class="mobile-subtitle">{sections[activeTab].description}</p>
+      </div>
     </div>
 
-    <div class="settings-layout">
+    <div class="settings-layout" on:touchstart={handleTouchStart} on:touchmove={handleTouchMove} on:touchend={handleTouchEnd}>
       <!-- Desktop Sidebar -->
       <div class="desktop-sidebar">
         <div class="sidebar-header">
@@ -171,8 +183,16 @@
           {#if activeTab === 'General'}
             <div class="settings-section">
               <div class="section-header">
-                <h3 class="section-title">Personalization</h3>
-                <p class="section-desc">Customize your experience</p>
+                <button class="mobile-nav-btn prev" on:click={prevTab} class:visible={activeTab !== 'General'}>
+                  <ChevronLeft size={24} />
+                </button>
+                <div class="header-content">
+                  <h3 class="section-title">Personalization</h3>
+                  <p class="section-desc">Customize your experience</p>
+                </div>
+                <button class="mobile-nav-btn next" on:click={nextTab} class:visible={activeTab !== 'Data Control'}>
+                  <ChevronRight size={24} />
+                </button>
               </div>
               
               <div class="settings-grid">
@@ -234,8 +254,16 @@
           {:else if activeTab === 'Data Control'}
             <div class="settings-section">
               <div class="section-header">
-                <h3 class="section-title">Privacy & Data</h3>
-                <p class="section-desc">Control how your data is used and stored</p>
+                <button class="mobile-nav-btn prev" on:click={prevTab} class:visible={activeTab !== 'General'}>
+                  <ChevronLeft size={24} />
+                </button>
+                <div class="header-content">
+                  <h3 class="section-title">Privacy & Data</h3>
+                  <p class="section-desc">Control how your data is used and stored</p>
+                </div>
+                <button class="mobile-nav-btn next" on:click={nextTab} class:visible={activeTab !== 'Data Control'}>
+                  <ChevronRight size={24} />
+                </button>
               </div>
               
               <div class="settings-grid">
@@ -280,8 +308,16 @@
           {:else if activeTab === 'Account'}
             <div class="settings-section">
               <div class="section-header">
-                <h3 class="section-title">Account Information</h3>
-                <p class="section-desc">Manage your account details and profile</p>
+                <button class="mobile-nav-btn prev" on:click={prevTab} class:visible={activeTab !== 'General'}>
+                  <ChevronLeft size={24} />
+                </button>
+                <div class="header-content">
+                  <h3 class="section-title">Account Information</h3>
+                  <p class="section-desc">Manage your account details and profile</p>
+                </div>
+                <button class="mobile-nav-btn next" on:click={nextTab} class:visible={activeTab !== 'Data Control'}>
+                  <ChevronRight size={24} />
+                </button>
               </div>
               
               <div class="settings-grid">
@@ -454,72 +490,29 @@
     color: var(--text-color);
   }
 
-  /* Mobile Tab Selector */
   .mobile-tab-selector {
     display: none;
     position: relative;
     border-bottom: 1px solid var(--border-color);
     z-index: 10;
-  }
-
-  .mobile-tab-trigger {
-    width: 100%;
     padding: 1rem 1.5rem;
-    background: none;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    transition: all 0.2s ease;
   }
 
-  .mobile-tab-trigger:hover {
-    background: var(--hover-color);
+  .mobile-header {
+    text-align: center;
   }
 
-  .mobile-tab-content {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .mobile-tab-icon {
-    width: 40px;
-    height: 40px;
-    background: var(--primary-color-translucent);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary-color);
-  }
-
-  .mobile-tab-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-
-  .mobile-tab-title {
+  .mobile-title {
+    font-size: 1.25rem;
     font-weight: 600;
     color: var(--text-color);
-    font-size: 0.95rem;
+    margin: 0;
   }
 
-  .mobile-tab-desc {
-    font-size: 0.8rem;
+  .mobile-subtitle {
+    font-size: 0.9rem;
     color: var(--text-muted);
-  }
-
-  .mobile-chevron {
-    transition: transform 0.2s ease;
-    color: var(--text-muted);
-  }
-
-  .mobile-chevron.rotated {
-    transform: rotate(90deg);
+    margin: 0;
   }
 
   .mobile-dropdown {
@@ -591,6 +584,31 @@
   .mobile-dropdown-desc {
     font-size: 0.75rem;
     color: var(--text-muted);
+  }
+
+  .mobile-menu-trigger {
+    display: none;
+    position: absolute;
+    top: 1.5rem;
+    right: 4rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+    z-index: 20;
+  }
+
+  .mobile-menu-trigger:hover {
+    color: var(--text-color);
+  }
+
+  .mobile-chevron {
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-chevron.rotated {
+    transform: rotate(90deg);
   }
 
   /* Main Layout */
@@ -725,6 +743,34 @@
 
   .section-header {
     margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-content {
+    text-align: center;
+    flex-grow: 1;
+  }
+
+  .mobile-nav-btn {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-nav-btn:hover {
+    background: var(--hover-color);
+    color: var(--text-color);
+  }
+
+  .mobile-nav-btn.visible {
+    display: block;
   }
 
   .section-title {
@@ -1126,6 +1172,10 @@
     }
 
     .mobile-tab-selector {
+      display: block;
+    }
+
+    .mobile-menu-trigger {
       display: block;
     }
 

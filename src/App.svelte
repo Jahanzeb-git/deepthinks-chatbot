@@ -7,6 +7,7 @@
   import { historyStore } from './stores/history';
   import { settingsStore } from './stores/settings';
   import { isSidebarExpanded } from './stores/sidebar';
+  import { aboutModalStore } from './stores/about';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   
@@ -18,11 +19,15 @@
   import Auth from './routes/Auth.svelte';
   import CustomizeBehaviorModal from './components/modals/CustomizeBehaviorModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
+  import AboutModal from './components/modals/AboutModal.svelte';
   import Welcome from './components/presentation/Welcome.svelte';
+  import PromptSuggestions from './components/presentation/PromptSuggestions.svelte';
+  import CustomLoading from './components/CustomLoading.svelte';
   
   let currentView: 'loading' | 'main' | 'auth' = 'loading';
   let authMode: 'signup' | 'login' = 'signup';
   let unauthenticatedSessionId = '';
+  let abortController: AbortController | null = null;
   
   $: theme = $themeStore;
   $: isInitialState = $chatStore.isInitialState;
@@ -145,6 +150,7 @@
   
   async function handleNewChat() {
     chatStore.clearMessages();
+    chatStore.setCreatingNewConversation(true);
     
     if ($authStore.isAuthenticated) {
       await createNewSession();
@@ -152,6 +158,7 @@
       // Generate new session ID for unauthenticated users
       unauthenticatedSessionId = generateSessionId();
     }
+    chatStore.setCreatingNewConversation(false);
   }
   
   async function handleSelectHistory(event: CustomEvent<{ sessionNumber: number }>) {
@@ -177,72 +184,62 @@
   }
   
   async function submitPrompt(message: string) {
-    chatStore.setLoading(true);
+    abortController = new AbortController();
     
+    const messageId = chatStore.startAIResponse();
+    let accumulatedContent = '';
+    let firstTokenReceived = false;
+
+    const onData = (data: { token: string, trace: boolean }) => {
+      if (!firstTokenReceived) {
+        chatStore.setLoading(false);
+        firstTokenReceived = true;
+      }
+      accumulatedContent += data.token;
+      chatStore.updateStreamingMessage(messageId, accumulatedContent);
+    };
+
+    const onEnd = async () => {
+      chatStore.finishStreaming(messageId);
+      if ($authStore.isAuthenticated) {
+        await loadHistory();
+      }
+      abortController = null;
+    };
+
+    const onError = (error: Error) => {
+      console.error('Chat error:', error);
+      const errorMessage = (error as any).status === 429 
+        ? "You have hit the limit. Please sign in to continue!"
+        : "Sorry, I encountered an error. Please try again.";
+      
+      chatStore.updateStreamingMessage(messageId, errorMessage);
+      chatStore.finishStreaming(messageId);
+      abortController = null;
+    };
+
     try {
-      // Determine session identifier
       const sessionId = $authStore.isAuthenticated 
         ? $sessionStore.currentSession?.toString() || ''
         : unauthenticatedSessionId;
       
-      // Send message to API
-      const response = await api.sendMessage(sessionId, message, $settingsStore.settings.reasoning);
-      
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-      
-      // Start AI response
-      const messageId = chatStore.startAIResponse();
-      
-      // Handle streaming response
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedContent = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.token) {
-                accumulatedContent += data.token;
-                chatStore.updateStreamingMessage(messageId, accumulatedContent);
-              } else if (data.status === 'done') {
-                chatStore.finishStreaming(messageId);
-                
-                // Update history after completing the AI response for authenticated users
-                if ($authStore.isAuthenticated) {
-                  await loadHistory();
-                }
-              }
-            } catch (e) {
-              // Ignore JSON parse errors for non-JSON lines
-            }
-          }
-        }
-      }
+      await api.sendMessage(
+        sessionId, 
+        message, 
+        $settingsStore.settings.reasoning, 
+        abortController.signal,
+        onData,
+        onEnd,
+        onError
+      );
     } catch (error: any) {
-      console.error('Chat error:', error);
-      
-      // Add error message
-      const errorMessageId = chatStore.startAIResponse();
-      const errorMessage = error.status === 429 
-        ? "You have hit the limit. Please sign in to continue!"
-        : "Sorry, I encountered an error. Please try again.";
-      
-      chatStore.updateStreamingMessage(errorMessageId, errorMessage);
-      chatStore.finishStreaming(errorMessageId);
-    } finally {
-      chatStore.setLoading(false);
+      if (error.name === 'AbortError') {
+        chatStore.interruptStreaming(messageId);
+        chatStore.setLoading(false); // Explicitly set loading to false
+        abortController = null;
+      } else {
+        onError(error);
+      }
     }
   }
 
@@ -258,6 +255,12 @@
     await submitPrompt(prompt);
   }
 
+  async function handleSuggestionSelect(event: CustomEvent<{ prompt: string }>) {
+    const { prompt } = event.detail;
+    chatStore.addUserMessage(prompt);
+    await submitPrompt(prompt);
+  }
+
   async function handleRegenerate(event: CustomEvent<{ messageId: string }>) {
     const { messageId } = event.detail;
     const userPrompt = chatStore.regenerateAIResponse(messageId);
@@ -266,6 +269,13 @@
       await submitPrompt(userPrompt);
     }
   }
+
+  function handleInterrupt() {
+    if (abortController) {
+      abortController.abort();
+    }
+  }
+
   function toggleSidebar() {
     isSidebarExpanded.update(n => !n);
   }
@@ -291,13 +301,22 @@
       on:touchend={handleTouchEnd}
     >
       {#if isInitialState}
-        <div class="welcome-wrapper">
+        <div class="initial-state-container">
           <Welcome on:prompt={handleWelcomePrompt} />
+          <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
+          <PromptSuggestions on:select={handleSuggestionSelect} />
         </div>
+      {:else}
+        <ChatContainer on:regenerate={handleRegenerate} />
+        <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
       {/if}
-      <ChatContainer on:regenerate={handleRegenerate} />
-      <ChatInput on:submit={handleChatSubmit} />
     </div>
+
+    {#if $chatStore.isCreatingNewConversation}
+      <div class="loading-overlay">
+        <CustomLoading />
+      </div>
+    {/if}
     
     <AuthButton onAuthClick={handleAuthClick} />
 
@@ -307,6 +326,9 @@
     {#if $settingsStore.isSettingsModalOpen}
       <SettingsModal />
     {/if}
+    {#if $aboutModalStore.isOpen}
+      <AboutModal isOpen={$aboutModalStore.isOpen} on:close={() => aboutModalStore.closeModal()} />
+    {/if}
       {#if $isSidebarExpanded && isMobile}
     <div class="mobile-sidebar-backdrop" on:click={toggleSidebar} />
   {/if}
@@ -314,14 +336,26 @@
 {/if}
 
 <style>
-  .welcome-wrapper {
-    position: absolute;
-    bottom: calc(50% + 50px); /* Position above the chat input */
-    left: 50%;
-    transform: translateX(-50%);
+  .initial-state-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1.5rem;
+  }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
-    max-width: 768px;
-    padding: 0 1rem;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
   }
 
   :global(:root) {

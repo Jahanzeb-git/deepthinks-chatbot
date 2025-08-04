@@ -6,12 +6,15 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  interrupted?: boolean;
 }
 
 export interface ChatState {
   messages: ChatMessage[];
   isInitialState: boolean;
   isLoading: boolean;
+  isStreaming: boolean;
+  isCreatingNewConversation: boolean;
   currentStreamingId: string | null;
 }
 
@@ -19,6 +22,8 @@ const initialState: ChatState = {
   messages: [],
   isInitialState: true,
   isLoading: false,
+  isStreaming: false,
+  isCreatingNewConversation: false,
   currentStreamingId: null
 };
 
@@ -52,7 +57,8 @@ function createChatStore() {
           timestamp: new Date(),
           isStreaming: true
         }],
-        isLoading: false,
+        isLoading: true, // This should be true when starting
+        isStreaming: true,
         currentStreamingId: messageId
       }));
       return messageId;
@@ -75,7 +81,22 @@ function createChatStore() {
             ? { ...msg, isStreaming: false }
             : msg
         ),
-        currentStreamingId: null
+        currentStreamingId: null,
+        isLoading: false,
+        isStreaming: false
+      }));
+    },
+    interruptStreaming: (messageId: string) => {
+      update(state => ({
+        ...state,
+        messages: state.messages.map(msg =>
+          msg.id === messageId
+            ? { ...msg, isStreaming: false, interrupted: true }
+            : msg
+        ),
+        currentStreamingId: null,
+        isLoading: false,
+        isStreaming: false
       }));
     },
     regenerateAIResponse: (aiMessageId: string) => {
@@ -94,12 +115,17 @@ function createChatStore() {
     setLoading: (loading: boolean) => {
       update(state => ({ ...state, isLoading: loading }));
     },
+    setCreatingNewConversation: (isCreating: boolean) => {
+      update(state => ({ ...state, isCreatingNewConversation: isCreating }));
+    },
     clearMessages: () => {
       update(state => ({
         ...state,
         messages: [],
         isInitialState: true,
         isLoading: false,
+        isStreaming: false,
+        isCreatingNewConversation: false,
         currentStreamingId: null
       }));
     },
@@ -125,6 +151,8 @@ function createChatStore() {
         messages: chatMessages,
         isInitialState: chatMessages.length === 0,
         isLoading: false,
+        isStreaming: false,
+        isCreatingNewConversation: false,
         currentStreamingId: null
       }));
     }

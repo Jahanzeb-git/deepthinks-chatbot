@@ -73,32 +73,88 @@ export const api = {
   },
 
   // Chat
-  async sendMessage(sessionId: string, query: string, reason: boolean = false) {
+  async sendMessage(
+    sessionId: string, 
+    query: string, 
+    reason: boolean = false, 
+    signal: AbortSignal,
+    onData: (data: { token: string, trace: boolean }) => void,
+    onEnd: () => void,
+    onError: (error: Error) => void
+  ) {
     const auth = get(authStore);
     const body: any = { query, reason };
-    
+
     if (auth.isAuthenticated) {
       body.session_id = sessionId;
     } else {
       body.session_id = sessionId;
     }
 
-    // sendMessage uses fetch directly, let's keep it that way for streaming
-    const response = await fetch(`${BASE_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {})
-      },
-      body: JSON.stringify(body)
-    });
+    try {
+      const response = await fetch(`${BASE_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {})
+        },
+        body: JSON.stringify(body),
+        signal
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new APIError(response.status, errorData.message || errorData.error || 'Request failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new APIError(response.status, errorData.message || errorData.error || 'Request failed');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const jsonStr = line.substring(5).trim();
+            if (jsonStr) {
+              try {
+                const data = JSON.parse(jsonStr);
+                if (data.token) {
+                  onData(data);
+                }
+                if (data.status === 'done') {
+                  onEnd();
+                }
+              } catch (e) {
+                console.error('Failed to parse stream data:', e);
+              }
+            }
+          } else if (line.startsWith('event: end-of-stream')) {
+            onEnd();
+            return;
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        onError(err);
+      } else {
+        // Re-throw the abort error so the calling function can handle it
+        throw err;
+      }
     }
-
-    return response;
   },
 
   // History
@@ -126,6 +182,14 @@ export const api = {
   async deleteUser() {
     return makeRequest('/delete_user', {
       method: 'DELETE'
+    });
+  },
+
+  // Interrupt
+  async interruptGeneration(sessionId: string) {
+    return makeRequest('/interrupt', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId })
     });
   }
 };

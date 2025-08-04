@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
-  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check } from 'lucide-svelte';
+  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
 
@@ -67,13 +67,11 @@
   class:mounted
   class:streaming={message.isStreaming}
 >
-  <div class="message-avatar">
-    {#if message.type === 'user'}
+  {#if message.type === 'user'}
+    <div class="message-avatar">
       <User size={18} />
-    {:else}
-      <Bot size={18} />
-    {/if}
-  </div>
+    </div>
+  {/if}
   
   <div class="message-content">
     {#if message.type === 'ai'}
@@ -97,7 +95,7 @@
   </div>
 </div>
 
-{#if message.type === 'ai' && !message.isStreaming && message.content}
+{#if message.type === 'ai' && !message.isStreaming && (message.content || message.interrupted)}
   <div class="message-actions">
     <div class="token-count">
       {tokenCount} tokens
@@ -119,6 +117,13 @@
       <button class="action-btn" on:click={handleRegenerate} title="Regenerate response">
         <RefreshCw size={16} />
       </button>
+    {/if}
+
+    {#if message.interrupted}
+      <div class="interrupted-indicator">
+        <AlertTriangle size={14} />
+        <span>Interrupted</span>
+      </div>
     {/if}
   </div>
 {/if}
@@ -154,10 +159,8 @@
     color: white;
   }
   
-  .ai .message-avatar {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-muted);
+  .message-container.ai {
+    gap: 0;
   }
   
   .message-content {
@@ -192,9 +195,22 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-left: 44px; /* Aligns with message content */
+    margin-left: 0; /* Aligns with message content */
     margin-bottom: 1.5rem;
     padding-top: 0.5rem;
+  }
+
+  .interrupted-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    font-style: italic;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    background-color: var(--hover-color);
   }
 
   .token-count {

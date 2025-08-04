@@ -1,11 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { Send, Mic, Paperclip, BrainCircuit } from 'lucide-svelte';
+  import { ArrowUp, Mic, Upload, BrainCircuit, Square } from 'lucide-svelte';
   import { chatStore } from '../stores/chat';
   import { settingsStore } from '../stores/settings';
+  import { authStore } from '../stores/auth';
+  import Tooltip from './shared/Tooltip.svelte';
 
   const dispatch = createEventDispatcher<{
-    submit: { message: string }
+    submit: { message: string };
+    interrupt: void;
   }>();
 
   let message = '';
@@ -15,9 +18,27 @@
 
   $: isInitialState = $chatStore.isInitialState;
   $: isLoading = $chatStore.isLoading;
+  $: isStreaming = $chatStore.isStreaming;
   $: reasoning = $settingsStore.settings.reasoning;
+  $: isAuthenticated = $authStore.isAuthenticated;
+
+  // Text persistence functionality
+  const DRAFT_KEY = 'deepthinks_draft_message';
 
   onMount(() => {
+    // Load persisted draft message
+    const savedDraft = localStorage.getItem(DRAFT_KEY);
+    if (savedDraft) {
+      message = savedDraft;
+      // Auto-resize textarea if needed
+      setTimeout(() => {
+        if (textareaElement) {
+          autoResize();
+        }
+      }, 0);
+    }
+
+    // Speech recognition setup
     if ('webkitSpeechRecognition' in window) {
       recognition = new webkitSpeechRecognition();
       recognition.continuous = false;
@@ -29,6 +50,7 @@
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             message += event.results[i][0].transcript;
+            saveDraft();
           } else {
             interim_transcript += event.results[i][0].transcript;
           }
@@ -46,13 +68,34 @@
     }
   });
 
+  function saveDraft() {
+    if (message.trim()) {
+      localStorage.setItem(DRAFT_KEY, message);
+    } else {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+
   function handleSubmit() {
-    if (message.trim() && !isLoading) {
+    if (message.trim() && !isStreaming) {
       dispatch('submit', { message: message.trim() });
       message = '';
+      clearDraft();
       if (textareaElement) {
         textareaElement.style.height = 'auto';
       }
+    }
+  }
+
+  function handleButtonClick() {
+    if (isStreaming) {
+      dispatch('interrupt');
+    } else {
+      handleSubmit();
     }
   }
 
@@ -70,11 +113,17 @@
     }
   }
 
+  function handleInput() {
+    autoResize();
+    saveDraft();
+  }
+
   function handlePaste(event: ClipboardEvent) {
     event.preventDefault();
     const text = event.clipboardData?.getData('text/plain');
     if (text) {
       document.execCommand('insertText', false, text);
+      setTimeout(saveDraft, 0);
     }
   }
 
@@ -104,34 +153,62 @@
 
 <div class="chat-input-container" class:initial-state={isInitialState} class:chat-state={!isInitialState}>
   <div class="input-wrapper">
-    <button class="icon-button" on:click={handleFileSelect} aria-label="Send file">
-      <Paperclip size={20} />
-    </button>
     <textarea
       bind:this={textareaElement}
       bind:value={message}
       on:keydown={handleKeydown}
-      on:input={autoResize}
+      on:input={handleInput}
       on:paste={handlePaste}
       placeholder="Message Deepthinks..."
       rows="1"
-      disabled={isLoading}
+      disabled={isStreaming}
       class="chat-textarea"
     ></textarea>
-    <button class="icon-button" on:click={toggleVoiceRecording} class:recording={isRecording} aria-label="Voice input">
-      <Mic size={20} />
-    </button>
-    <button class="icon-button" on:click={toggleReasoning} class:active={reasoning} aria-label="Toggle reasoning">
-      <BrainCircuit size={20} />
-    </button>
-    <button
-      on:click={handleSubmit}
-      disabled={!message.trim() || isLoading}
-      class="send-button"
-      aria-label="Send message"
-    >
-      <Send size={20} />
-    </button>
+    
+    <div class="controls-container">
+      <button 
+        class="icon-button mic-button" 
+        class:recording={isRecording} 
+        on:click={toggleVoiceRecording} 
+        aria-label="Voice input"
+      >
+        <Mic size={18} />
+      </button>
+      
+      <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
+        <button 
+          class="reasoning-toggle" 
+          class:active={reasoning} 
+          on:click={toggleReasoning} 
+          aria-label="Toggle reasoning"
+          disabled={!isAuthenticated}
+        >
+          <BrainCircuit size={16} />
+          <span class="reasoning-text">Reasoning</span>
+        </button>
+      </Tooltip>
+      
+      <button 
+        class="icon-button file-button" 
+        on:click={handleFileSelect} 
+        aria-label="Upload file"
+      >
+        <Upload size={18} />
+      </button>
+      
+      <button
+        on:click={handleButtonClick}
+        disabled={!message.trim() && !isStreaming}
+        class="send-button"
+        aria-label={isStreaming ? 'Stop generation' : 'Send message'}
+      >
+        {#if isStreaming}
+          <Square size={16} />
+        {:else}
+          <ArrowUp size={16} />
+        {/if}
+      </button>
+    </div>
   </div>
 </div>
 
@@ -141,16 +218,12 @@
     max-width: 768px;
     margin: 0 auto;
     padding: 0 1rem;
-    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    transition: transform 0.3s ease, opacity 0.3s ease;
     z-index: 50;
   }
 
   .chat-input-container.initial-state {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -40%) scale(1.1);
-    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    /* This is now handled by the parent container in App.svelte */
   }
 
   .chat-input-container.chat-state {
@@ -165,18 +238,18 @@
     position: relative;
     display: flex;
     align-items: center;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    background: var(--surface-color, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 24px;
-    padding: 0.75rem 1rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    gap: 8px;
   }
 
   .input-wrapper:focus-within {
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
   }
 
   .chat-textarea {
@@ -186,16 +259,17 @@
     outline: none;
     resize: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 1rem;
+    font-size: 15px;
     line-height: 1.5;
-    color: var(--text-color);
+    color: var(--text-color, #1f2937);
     max-height: 120px;
+    min-height: 20px;
     overflow-y: auto;
-    padding: 0 0.5rem;
+    padding: 0;
   }
 
   .chat-textarea::placeholder {
-    color: var(--text-muted);
+    color: var(--text-muted, #9ca3af);
   }
 
   .chat-textarea:disabled {
@@ -203,76 +277,177 @@
     cursor: not-allowed;
   }
 
+  .controls-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
   .icon-button {
     background: transparent;
     border: none;
-    color: var(--text-muted);
+    color: var(--text-muted, #6b7280);
     cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 50%;
-    transition: all 0.2s ease;
+    padding: 8px;
+    border-radius: 8px;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .icon-button:hover {
-    background: var(--hover-color);
-    color: var(--text-color);
+    background: var(--hover-color, #f3f4f6);
+    color: var(--text-color, #374151);
   }
 
-  .icon-button.recording {
-    color: var(--primary-color);
+  .mic-button.recording {
+    color: var(--error-color, #ef4444);
+    background: rgba(239, 68, 68, 0.08);
   }
-  
-  .icon-button.active {
-    color: var(--primary-color);
+
+  .reasoning-toggle {
+    background: var(--surface-color, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    color: var(--text-muted, #6b7280);
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 12px;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .reasoning-toggle:hover {
+    background: var(--hover-color, #f9fafb);
+    border-color: var(--primary-color, #3b82f6);
+    color: var(--primary-color, #3b82f6);
+  }
+
+  .reasoning-toggle.active {
+    background: var(--primary-color, #3b82f6);
+    border-color: var(--primary-color, #3b82f6);
+    color: white;
+  }
+
+  .reasoning-text {
+    font-family: inherit;
+    letter-spacing: -0.01em;
   }
 
   .send-button {
-    width: 36px;
-    height: 36px;
-    background: var(--primary-color);
+    width: 32px;
+    height: 32px;
+    background: var(--primary-color, #3b82f6);
     border: none;
-    border-radius: 50%;
+    border-radius: 16px;
     color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease, transform 0.1s ease;
     padding: 0;
-    margin-left: 0.5rem;
   }
 
   .send-button:hover:not(:disabled) {
-    background: var(--primary-hover);
-    transform: scale(1.05);
+    background: var(--primary-hover, #2563eb);
+  }
+
+  .send-button:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .send-button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-    transform: scale(1);
   }
 
+  /* Minimal scrollbar styling */
+  .chat-textarea::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .chat-textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-textarea::-webkit-scrollbar-thumb {
+    background: var(--border-color, #e2e8f0);
+    border-radius: 2px;
+  }
+
+  /* Mobile optimizations */
   @media (max-width: 768px) {
     .chat-input-container {
-      padding: 0 1rem;
+      padding: 0 12px;
     }
 
     .chat-input-container.chat-state {
-      padding-bottom: 1rem;
+      padding-bottom: 16px;
     }
 
     .input-wrapper {
-      padding: 0.6rem 0.75rem;
-    }
-
-    .chat-textarea {
-      font-size: 0.9rem;
+      padding: 10px 12px;
+      gap: 6px;
     }
 
     .send-button {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
+      border-radius: 15px;
+    }
+
+    .reasoning-toggle {
+      padding: 5px 8px;
+      font-size: 12px;
+      gap: 5px;
+    }
+
+    .icon-button {
+      padding: 6px;
+    }
+
+    .controls-container {
+      gap: 3px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .reasoning-text {
+      display: none;
+    }
+    
+    .reasoning-toggle {
+      padding: 6px;
+      min-width: auto;
+    }
+
+    .chat-input-container.initial-state {
+      /* transform: translate(-50%, -40%) scale(1.02); */
+    }
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .input-wrapper {
+      border-width: 2px;
+    }
+    
+    .reasoning-toggle {
+      border-width: 2px;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
     }
   }
 </style>
