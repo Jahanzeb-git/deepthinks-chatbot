@@ -92,10 +92,10 @@
 
 <style>
   .thinking-container {
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--reasoning-border);
     border-radius: 16px;
     margin: 1.5rem 0;
-    background: var(--primary-color-translucent);
+    background: var(--reasoning-bg);
     overflow: hidden;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;

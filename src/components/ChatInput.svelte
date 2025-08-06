@@ -202,6 +202,7 @@
         <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
           <button 
             class="icon-button file-button" 
+            class:active={showFileUploader}
             on:click={handleFileSelect} 
             aria-label="Upload file"
             disabled={!isAuthenticated}
@@ -322,6 +323,11 @@
     background: rgba(239, 68, 68, 0.08);
   }
 
+  .file-button.active {
+    background: var(--primary-color, #3b82f6);
+    color: white;
+  }
+
   .reasoning-toggle {
     background: var(--surface-color, #ffffff);
     border: 1px solid var(--border-color, #e2e8f0);
@@ -348,6 +354,12 @@
     background: var(--primary-color, #3b82f6);
     border-color: var(--primary-color, #3b82f6);
     color: white;
+  }
+
+  @media (max-width: 480px) {
+    .reasoning-toggle {
+      background-color: var(--hover-color);
+    }
   }
 
   .reasoning-text {

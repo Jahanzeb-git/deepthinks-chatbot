@@ -42,3 +42,15 @@ button:focus,
 button:focus-visible {
   outline: none;
 }
+
+:root {
+  --reasoning-bg: rgba(59, 130, 246, 0.05);
+  --reasoning-border: rgba(59, 130, 246, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --reasoning-bg: hsl(220, 13%, 18%);
+    --reasoning-border: hsl(220, 13%, 25%);
+  }
+}
