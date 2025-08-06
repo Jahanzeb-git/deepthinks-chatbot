@@ -191,5 +191,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ session_id: sessionId })
     });
+  },
+
+  // File Upload
+  async uploadFile(file: File, sessionId: string, token: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', sessionId);
+
+    const response = await fetch(`${BASE_URL}/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new APIError(response.status, errorData.message || errorData.error || 'Request failed');
+    }
+
+    return response.json();
   }
 };

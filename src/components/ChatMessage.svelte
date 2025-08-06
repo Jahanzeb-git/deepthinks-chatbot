@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
+  import { renderMath } from '../lib/katex';
   import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
@@ -75,7 +76,7 @@
   
   <div class="message-content">
     {#if message.type === 'ai'}
-      <div class="ai-message">
+      <div class="ai-message" use:renderMath>
         {#each segments as segment}
           {#if segment.type === 'thinking'}
             <ReasoningBlock content={segment.content} streaming={message.isStreaming} />

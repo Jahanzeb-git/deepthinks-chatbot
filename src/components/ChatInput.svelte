@@ -4,7 +4,9 @@
   import { chatStore } from '../stores/chat';
   import { settingsStore } from '../stores/settings';
   import { authStore } from '../stores/auth';
+  import { fileStore } from '../stores/file';
   import Tooltip from './shared/Tooltip.svelte';
+  import FileUploader from './FileUploader.svelte';
 
   const dispatch = createEventDispatcher<{
     submit: { message: string };
@@ -15,12 +17,14 @@
   let textareaElement: HTMLTextAreaElement;
   let isRecording = false;
   let recognition: any = null;
+  let showFileUploader = false;
 
   $: isInitialState = $chatStore.isInitialState;
   $: isLoading = $chatStore.isLoading;
   $: isStreaming = $chatStore.isStreaming;
   $: reasoning = $settingsStore.settings.reasoning;
   $: isAuthenticated = $authStore.isAuthenticated;
+  $: fileStatus = $fileStore.status;
 
   // Text persistence functionality
   const DRAFT_KEY = 'deepthinks_draft_message';
@@ -88,6 +92,8 @@
       if (textareaElement) {
         textareaElement.style.height = 'auto';
       }
+      fileStore.clearFile();
+      showFileUploader = false;
     }
   }
 
@@ -142,8 +148,7 @@
   }
 
   function handleFileSelect() {
-    // This is a placeholder for the file selection logic
-    alert('File selection is not yet implemented.');
+    showFileUploader = !showFileUploader;
   }
 
   function toggleReasoning() {
@@ -152,6 +157,9 @@
 </script>
 
 <div class="chat-input-container" class:initial-state={isInitialState} class:chat-state={!isInitialState}>
+  {#if showFileUploader}
+    <FileUploader />
+  {/if}
   <div class="input-wrapper">
     <textarea
       bind:this={textareaElement}
@@ -175,26 +183,33 @@
         <Mic size={18} />
       </button>
       
-      <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
-        <button 
-          class="reasoning-toggle" 
-          class:active={reasoning} 
-          on:click={toggleReasoning} 
-          aria-label="Toggle reasoning"
-          disabled={!isAuthenticated}
-        >
-          <BrainCircuit size={16} />
-          <span class="reasoning-text">Reasoning</span>
-        </button>
-      </Tooltip>
+      <div class="tooltip-wrapper">
+        <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
+          <button 
+            class="reasoning-toggle" 
+            class:active={reasoning} 
+            on:click={toggleReasoning} 
+            aria-label="Toggle reasoning"
+            disabled={!isAuthenticated}
+          >
+            <BrainCircuit size={16} />
+            <span class="reasoning-text">Reasoning</span>
+          </button>
+        </Tooltip>
+      </div>
       
-      <button 
-        class="icon-button file-button" 
-        on:click={handleFileSelect} 
-        aria-label="Upload file"
-      >
-        <Upload size={18} />
-      </button>
+      <div class="tooltip-wrapper">
+        <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
+          <button 
+            class="icon-button file-button" 
+            on:click={handleFileSelect} 
+            aria-label="Upload file"
+            disabled={!isAuthenticated}
+          >
+            <Upload size={18} />
+          </button>
+        </Tooltip>
+      </div>
       
       <button
         on:click={handleButtonClick}
@@ -366,6 +381,10 @@
   .send-button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  .tooltip-wrapper {
+    position: relative;
   }
 
   /* Minimal scrollbar styling */
