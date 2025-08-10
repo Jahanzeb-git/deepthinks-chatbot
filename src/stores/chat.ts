@@ -7,6 +7,8 @@ export interface ChatMessage {
   timestamp: Date;
   isStreaming?: boolean;
   interrupted?: boolean;
+  tokenCount?: number;
+  model?: string;
 }
 
 export interface ChatState {
@@ -46,7 +48,7 @@ function createChatStore() {
       }));
       return messageId;
     },
-    startAIResponse: () => {
+    startAIResponse: (model: string) => {
       const messageId = crypto.randomUUID();
       update(state => ({
         ...state,
@@ -55,7 +57,8 @@ function createChatStore() {
           type: 'ai',
           content: '',
           timestamp: new Date(),
-          isStreaming: true
+          isStreaming: true,
+          model: model
         }],
         isLoading: true, // This should be true when starting
         isStreaming: true,
@@ -73,12 +76,12 @@ function createChatStore() {
         )
       }));
     },
-    finishStreaming: (messageId: string) => {
+    finishStreaming: (messageId: string, tokenCount: number) => {
       update(state => ({
         ...state,
         messages: state.messages.map(msg => 
           msg.id === messageId 
-            ? { ...msg, isStreaming: false }
+            ? { ...msg, isStreaming: false, tokenCount: tokenCount }
             : msg
         ),
         currentStreamingId: null,

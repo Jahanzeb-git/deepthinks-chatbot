@@ -20,11 +20,13 @@
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
+    "chart.js": "^4.5.0",
     "dompurify": "^3.2.6",
     "google-auth-library": "^10.1.0",
     "katex": "^0.16.22",
     "lucide-svelte": "^0.525.0",
     "marked": "^16.0.0",
+    "svelte-chartjs": "^3.1.5",
     "uuid": "^11.1.0"
   }
 }

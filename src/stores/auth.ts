@@ -53,6 +53,7 @@ function createAuthStore() {
       // Remove all auth data from localStorage
       localStorage.removeItem('deepthinks_token');
       localStorage.removeItem('deepthinks_user');
+      localStorage.removeItem('tokenUsage');
       // Keep signed up status so user sees login button instead of signup
       update(state => ({
         ...state,

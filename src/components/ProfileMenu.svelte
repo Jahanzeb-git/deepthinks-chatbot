@@ -3,7 +3,8 @@
   import { slide } from 'svelte/transition';
   import { authStore, type User } from '../stores/auth';
   import { settingsStore } from '../stores/settings';
-  import { DollarSign, Settings, HelpCircle, LogOut, User as UserIcon, Edit } from 'lucide-svelte';
+  import { analyticsStore } from '../stores/analytics';
+  import { DollarSign, Settings, BarChart2, LogOut, User as UserIcon, Edit } from 'lucide-svelte';
 
   export let user: User;
 
@@ -79,10 +80,10 @@
           <Settings size={16} />
           <span>Settings</span>
         </button>
-        <a href="/help" class="menu-item">
-          <HelpCircle size={16} />
-          <span>Help</span>
-        </a>
+        <button class="menu-item" on:click={() => { menuOpen = false; analyticsStore.openAnalyticsModal(); }}>
+          <BarChart2 size={16} />
+          <span>Analytics</span>
+        </button>
       </div>
       <div class="menu-footer">
         <button class="logout-button" on:click={handleLogout}>

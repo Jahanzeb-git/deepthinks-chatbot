@@ -213,5 +213,35 @@ export const api = {
     }
 
     return response.json();
-  }
+  },
+
+  // Analytics
+  async postTokenUsage(usage: any) {
+    const auth = get(authStore);
+    if (!auth.user?.email) {
+      throw new Error('User email is not available');
+    }
+    return makeRequest('/api/token-usage', {
+      method: 'POST',
+      headers: {
+        'X-User-Email': auth.user.email,
+      },
+      body: JSON.stringify(usage),
+    });
+  },
+
+  async getTokenUsage(since?: number, limit?: number, offset?: number) {
+    const auth = get(authStore);
+    if (!auth.user?.email) {
+      throw new Error('User email is not available');
+    }
+    const params = new URLSearchParams({
+      email: auth.user.email,
+    });
+    if (since) params.set('since', since.toString());
+    if (limit) params.set('limit', limit.toString());
+    if (offset) params.set('offset', offset.toString());
+
+    return makeRequest(`/api/token-usage?${params.toString()}`);
+  },
 };

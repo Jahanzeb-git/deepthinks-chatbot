@@ -42,7 +42,9 @@
     }
   }
 
-  $: tokenCount = message.content.split(/\s+/).filter(Boolean).length;
+  $: tokenCount = message.tokenCount !== undefined
+    ? message.tokenCount
+    : message.content.split(/\s+/).filter(Boolean).length;
 
   function handleCopy() {
     navigator.clipboard.writeText(message.content);

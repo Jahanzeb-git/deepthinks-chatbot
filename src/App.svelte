@@ -8,6 +8,7 @@
   import { settingsStore } from './stores/settings';
   import { isSidebarExpanded } from './stores/sidebar';
   import { aboutModalStore } from './stores/about';
+  import { analyticsStore } from './stores/analytics';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   
@@ -20,6 +21,7 @@
   import CustomizeBehaviorModal from './components/modals/CustomizeBehaviorModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import AboutModal from './components/modals/AboutModal.svelte';
+  import AnalyticsModal from './components/modals/AnalyticsModal.svelte';
   import Welcome from './components/presentation/Welcome.svelte';
   import PromptSuggestions from './components/presentation/PromptSuggestions.svelte';
   import CustomLoading from './components/CustomLoading.svelte';
@@ -100,7 +102,8 @@
       if ($authStore.isAuthenticated) {
         // Load settings and history for authenticated users
         await Promise.all([
-          loadHistory()
+          loadHistory(),
+          analyticsStore.syncAnalytics(),
         ]);
         
         // Create initial session if none exists
@@ -186,9 +189,11 @@
   async function submitPrompt(message: string) {
     abortController = new AbortController();
     
-    const messageId = chatStore.startAIResponse();
+    const model = $settingsStore.settings.reasoning ? 'Reasoning' : 'Default';
+    const messageId = chatStore.startAIResponse(model);
     let accumulatedContent = '';
     let firstTokenReceived = false;
+    let streamEnded = false;
 
     const onData = (data: { token: string, trace: boolean }) => {
       if (!firstTokenReceived) {
@@ -200,7 +205,13 @@
     };
 
     const onEnd = async () => {
-      chatStore.finishStreaming(messageId);
+      if (streamEnded) return;
+      streamEnded = true;
+
+      const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
+      chatStore.finishStreaming(messageId, tokenCount);
+      analyticsStore.addTokenUsage(model, message.split(/\s+/).filter(Boolean).length, tokenCount);
+
       if ($authStore.isAuthenticated) {
         await loadHistory();
       }
@@ -328,6 +339,9 @@
     {/if}
     {#if $aboutModalStore.isOpen}
       <AboutModal isOpen={$aboutModalStore.isOpen} on:close={() => aboutModalStore.closeModal()} />
+    {/if}
+    {#if $analyticsStore.isAnalyticsModalOpen}
+      <AnalyticsModal />
     {/if}
       {#if $isSidebarExpanded && isMobile}
     <div class="mobile-sidebar-backdrop" on:click={toggleSidebar} />
