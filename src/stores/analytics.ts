@@ -19,23 +19,38 @@ function createAnalyticsStore() {
   }
 
   async function syncAnalytics() {
-    const storedUsage = localStorage.getItem('tokenUsage');
-    if (!storedUsage) {
-      try {
-        const response = await api.getTokenUsage();
-        if (response.ok && response.items) {
-          const usageData = response.items.map((item: any) => ({
-            timestamp: item.timestamp,
-            model: item.model,
-            inputTokens: item.inputTokens,
-            outputTokens: item.outputTokens,
-          }));
-          saveUsageToStorage(usageData);
-          update(state => ({ ...state, tokenUsage: usageData }));
-        }
-      } catch (error) {
-        console.error('Failed to sync analytics from backend:', error);
+    const storedUsageJSON = localStorage.getItem('tokenUsage');
+    const localUsage: TokenUsage[] = storedUsageJSON ? JSON.parse(storedUsageJSON) : [];
+    
+    const since = localUsage.length > 0 ? localUsage[localUsage.length - 1].timestamp : undefined;
+
+    try {
+      const response = await api.getTokenUsage(since);
+      if (response.ok && response.items) {
+        const newUsage = response.items.map((item: any) => ({
+          timestamp: item.timestamp,
+          model: item.model,
+          inputTokens: item.inputTokens,
+          outputTokens: item.outputTokens,
+        }));
+
+        // Combine local and new usage, avoiding duplicates
+        const combinedUsage = [...localUsage];
+        const localTimestamps = new Set(localUsage.map(u => u.timestamp));
+        newUsage.forEach((usage: TokenUsage) => {
+          if (!localTimestamps.has(usage.timestamp)) {
+            combinedUsage.push(usage);
+          }
+        });
+
+        // Sort by timestamp to be sure
+        combinedUsage.sort((a, b) => a.timestamp - b.timestamp);
+
+        saveUsageToStorage(combinedUsage);
+        update(state => ({ ...state, tokenUsage: combinedUsage }));
       }
+    } catch (error) {
+      console.error('Failed to sync analytics from backend:', error);
     }
   }
 
