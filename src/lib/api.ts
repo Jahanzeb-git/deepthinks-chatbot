@@ -37,6 +37,11 @@ async function makeRequest(endpoint: string, options: RequestInit = {}) {
     return response.json().catch(() => ({})); // Return empty object if body is empty
   }
   
+  // For 201 Created, response might have a body
+  if (response.status === 201) {
+    return response.json();
+  }
+
   return response.json();
 }
 
@@ -171,7 +176,7 @@ export const api = {
     return makeRequest('/settings');
   },
 
-  async updateSettings(settings: Partial<UserSettings & { theme: string }>) {
+  async updateSettings(settings: Partial<UserSettings & { theme: string }> ) {
     return makeRequest('/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings)
@@ -244,4 +249,30 @@ export const api = {
 
     return makeRequest(`/api/token-usage?${params.toString()}`);
   },
+
+  // Sharing
+  async shareSession(sessionNumber: number, password?: string) {
+    const body: { password?: string } = {};
+    if (password) {
+      body.password = password;
+    }
+    return makeRequest(`/session/${sessionNumber}/share`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+  },
+
+  async getSharedConversation(shareId: string, password?: string) {
+    let url = `/conversation-history/share/${shareId}`;
+    if (password) {
+      url += `?password=${encodeURIComponent(password)}`;
+    }
+    // This request does not use the standard makeRequest because it might not need auth
+    const response = await fetch(`${BASE_URL}${url}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new APIError(response.status, errorData.message || 'Failed to fetch shared conversation.');
+    }
+    return response.json();
+  }
 };

@@ -3,24 +3,36 @@
   import { Plus, MessageSquare, ChevronsLeft, ChevronsRight, Info } from 'lucide-svelte';
   import { historyStore, type HistoryItem } from '../stores/history';
   import { authStore } from '../stores/auth';
+  import { chatStore } from '../stores/chat';
   import { isSidebarExpanded } from '../stores/sidebar';
   import { aboutModalStore } from '../stores/about';
+  import { sessionUuidStore } from '../stores/sessionUuid';
   import { truncateText, formatTimestamp } from '../lib/utils';
+  import ShareButton from './ShareButton.svelte';
   
+  export let disabled = false;
+
   const dispatch = createEventDispatcher<{
     newChat: void;
     selectHistory: { sessionNumber: number };
   }>();
   
   function toggleSidebar() {
+    if (disabled) return;
     isSidebarExpanded.update(n => !n);
   }
   
   function handleNewChat() {
+    if (disabled) return;
     dispatch('newChat');
   }
   
-  function handleHistoryClick(item: HistoryItem) {
+  function handleHistoryClick(event: MouseEvent, item: HistoryItem) {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
     dispatch('selectHistory', { sessionNumber: item.session_number });
   }
   
@@ -28,7 +40,7 @@
   $: historyItems = $historyStore;
 </script>
 
-<div class="sidebar-wrapper" class:expanded={$isSidebarExpanded}>
+<div class="sidebar-wrapper" class:expanded={$isSidebarExpanded} class:disabled>
   <aside 
     class="sidebar"
     role="navigation"
@@ -51,6 +63,7 @@
       class:expanded={$isSidebarExpanded}
       on:click={handleNewChat} 
       title="Start a new conversation"
+      {disabled}
     >
       <div class="btn-icon">
         <Plus size={$isSidebarExpanded ? 18 : 20} />
@@ -66,11 +79,13 @@
         <h2 class="history-header">Recent Chats</h2>
         <div class="history-list">
           {#each $historyStore as item, index (item.session_number)}
-            <button 
+            <a 
+              href="/{sessionUuidStore.getUuidBySessionNumber(item.session_number) || ''}"
               class="history-item"
-              on:click={() => handleHistoryClick(item)}
+              on:click={(e) => handleHistoryClick(e, item)}
               title={`Continue chat: ${item.prompt}`}
               style="--delay: {index}"
+              aria-disabled={disabled}
             >
               <div class="history-icon">
                 <MessageSquare size={14} />
@@ -79,19 +94,23 @@
                 <span class="history-prompt">{truncateText(item.prompt, 35)}</span>
                 <span class="history-time">{formatTimestamp(item.timestamp)}</span>
               </div>
-            </button>
+            </a>
           {/each}
         </div>
       </section>
     {/if}
     
     <!-- Bottom Actions -->
-    <div class="bottom-actions">
+    <div class="bottom-actions" class:expanded={$isSidebarExpanded}>
+      {#if !$chatStore.isInitialState && $authStore.isAuthenticated}
+        <ShareButton expanded={$isSidebarExpanded} />
+      {/if}
       <button 
         class="action-btn"
         class:expanded={$isSidebarExpanded}
         title="About"
         on:click={() => aboutModalStore.openModal()}
+        {disabled}
       >
         <div class="btn-icon">
           <Info size={$isSidebarExpanded ? 18 : 20} />
@@ -109,6 +128,7 @@
     on:click={toggleSidebar} 
     aria-label={$isSidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
     title={$isSidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+    {disabled}
   >
     <div class="toggle-icon">
       {#if $isSidebarExpanded}
@@ -130,6 +150,10 @@
   }
   .sidebar-wrapper.expanded {
     width: var(--sidebar-expanded-width, 300px);
+  }
+  .sidebar-wrapper.disabled {
+    pointer-events: none;
+    opacity: 0.8;
   }
 
   .sidebar {
@@ -346,6 +370,7 @@
     animation: fadeInSlide 0.4s ease forwards;
     animation-delay: calc(0.3s + var(--delay, 0) * 0.05s);
     position: relative;
+    text-decoration: none;
   }
   .history-item::before {
     content: '';
@@ -405,6 +430,17 @@
     margin-top: auto;
     padding: 1.25rem 0;
     border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .bottom-actions.expanded {
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.25rem 1rem;
   }
   
   /* --- Animations --- */

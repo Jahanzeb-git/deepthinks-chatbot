@@ -8,6 +8,8 @@
   import Tooltip from './shared/Tooltip.svelte';
   import FileUploader from './FileUploader.svelte';
 
+  export let disabled = false;
+
   const dispatch = createEventDispatcher<{
     submit: { message: string };
     interrupt: void;
@@ -156,79 +158,90 @@
   }
 </script>
 
-<div class="chat-input-container" class:initial-state={isInitialState} class:chat-state={!isInitialState}>
-  {#if showFileUploader}
-    <FileUploader />
-  {/if}
-  <div class="input-wrapper">
-    <textarea
-      bind:this={textareaElement}
-      bind:value={message}
-      on:keydown={handleKeydown}
-      on:input={handleInput}
-      on:paste={handlePaste}
-      placeholder="Message Deepthinks..."
-      rows="1"
-      disabled={isStreaming}
-      class="chat-textarea"
-    ></textarea>
-    
-    <div class="controls-container">
-      <button 
-        class="icon-button mic-button" 
-        class:recording={isRecording} 
-        on:click={toggleVoiceRecording} 
-        aria-label="Voice input"
-      >
-        <Mic size={18} />
-      </button>
+<fieldset {disabled} class="chat-input-fieldset">
+  <div class="chat-input-container" class:initial-state={isInitialState} class:chat-state={!isInitialState}>
+    {#if showFileUploader}
+      <FileUploader />
+    {/if}
+    <div class="input-wrapper">
+      <textarea
+        bind:this={textareaElement}
+        bind:value={message}
+        on:keydown={handleKeydown}
+        on:input={handleInput}
+        on:paste={handlePaste}
+        placeholder="Message Deepthinks..."
+        rows="1"
+        disabled={isStreaming || disabled}
+        class="chat-textarea"
+      ></textarea>
       
-      <div class="tooltip-wrapper">
-        <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
-          <button 
-            class="reasoning-toggle" 
-            class:active={reasoning} 
-            on:click={toggleReasoning} 
-            aria-label="Toggle reasoning"
-            disabled={!isAuthenticated}
-          >
-            <BrainCircuit size={16} />
-            <span class="reasoning-text">Reasoning</span>
-          </button>
-        </Tooltip>
+      <div class="controls-container">
+        <button 
+          class="icon-button mic-button" 
+          class:recording={isRecording} 
+          on:click={toggleVoiceRecording} 
+          aria-label="Voice input"
+        >
+          <Mic size={18} />
+        </button>
+        
+        <div class="tooltip-wrapper">
+          <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
+            <button 
+              class="reasoning-toggle" 
+              class:active={reasoning} 
+              on:click={toggleReasoning} 
+              aria-label="Toggle reasoning"
+              disabled={!isAuthenticated || disabled}
+            >
+              <BrainCircuit size={16} />
+              <span class="reasoning-text">Reasoning</span>
+            </button>
+          </Tooltip>
+        </div>
+        
+        <div class="tooltip-wrapper">
+          <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
+            <button 
+              class="icon-button file-button" 
+              class:active={showFileUploader}
+              on:click={handleFileSelect} 
+              aria-label="Upload file"
+              disabled={!isAuthenticated || disabled}
+            >
+              <Upload size={18} />
+            </button>
+          </Tooltip>
+        </div>
+        
+        <button
+          on:click={handleButtonClick}
+          disabled={(!message.trim() && !isStreaming) || disabled}
+          class="send-button"
+          aria-label={isStreaming ? 'Stop generation' : 'Send message'}
+        >
+          {#if isStreaming}
+            <Square size={16} />
+          {:else}
+            <ArrowUp size={16} />
+          {/if}
+        </button>
       </div>
-      
-      <div class="tooltip-wrapper">
-        <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
-          <button 
-            class="icon-button file-button" 
-            class:active={showFileUploader}
-            on:click={handleFileSelect} 
-            aria-label="Upload file"
-            disabled={!isAuthenticated}
-          >
-            <Upload size={18} />
-          </button>
-        </Tooltip>
-      </div>
-      
-      <button
-        on:click={handleButtonClick}
-        disabled={!message.trim() && !isStreaming}
-        class="send-button"
-        aria-label={isStreaming ? 'Stop generation' : 'Send message'}
-      >
-        {#if isStreaming}
-          <Square size={16} />
-        {:else}
-          <ArrowUp size={16} />
-        {/if}
-      </button>
     </div>
   </div>
-</div>
+</fieldset>
 
 <style>
+  .chat-input-fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .chat-input-fieldset:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
   .chat-input-container {
     width: 100%;
     max-width: 768px;

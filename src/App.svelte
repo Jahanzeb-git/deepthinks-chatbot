@@ -9,11 +9,11 @@
   import { isSidebarExpanded } from './stores/sidebar';
   import { aboutModalStore } from './stores/about';
   import { analyticsStore } from './stores/analytics';
+  import { sessionUuidStore } from './stores/sessionUuid';
+  import { shareStore } from './stores/share';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   
-  import LoadingScreen from './components/LoadingScreen.svelte';
-  import AuthButton from './components/AuthButton.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import ChatContainer from './components/ChatContainer.svelte';
   import ChatInput from './components/ChatInput.svelte';
@@ -22,11 +22,20 @@
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import AboutModal from './components/modals/AboutModal.svelte';
   import AnalyticsModal from './components/modals/AnalyticsModal.svelte';
+  import ShareModal from './components/modals/ShareModal.svelte';
+  import PasswordPromptModal from './components/modals/PasswordPromptModal.svelte';
   import Welcome from './components/presentation/Welcome.svelte';
   import PromptSuggestions from './components/presentation/PromptSuggestions.svelte';
   import CustomLoading from './components/CustomLoading.svelte';
+  import AuthButton from './components/AuthButton.svelte';
   
-  let currentView: 'loading' | 'main' | 'auth' = 'loading';
+  let currentView: 'main' | 'auth' = 'main';
+  let isSharedView = false;
+  let showPasswordModal = false;
+  let passwordError: string | null = null;
+  let passwordLoading = false;
+  let shareIdForPassword: string | null = null;
+
   let authMode: 'signup' | 'login' = 'signup';
   let unauthenticatedSessionId = '';
   let abortController: AbortController | null = null;
@@ -39,30 +48,26 @@
   let isMobile = false;
 
   function handleTouchStart(e: TouchEvent) {
-    if (!isMobile) return;
+    if (!isMobile || isSharedView) return;
     touchStartX = e.touches[0].clientX;
-    touchEndX = e.touches[0].clientX; // Reset on new touch
+    touchEndX = e.touches[0].clientX;
   }
 
   function handleTouchMove(e: TouchEvent) {
-    if (!isMobile) return;
+    if (!isMobile || isSharedView) return;
     touchEndX = e.touches[0].clientX;
   }
 
   function handleTouchEnd() {
-    if (!isMobile) return;
+    if (!isMobile || isSharedView) return;
     const swipeDistance = touchEndX - touchStartX;
-    const minSwipeDistance = 50; // Minimum distance for a swipe
+    const minSwipeDistance = 50;
 
-    if (Math.abs(swipeDistance) < minSwipeDistance) {
-      return;
-    }
+    if (Math.abs(swipeDistance) < minSwipeDistance) return;
 
     if (swipeDistance > 0 && !$isSidebarExpanded) {
-      // Swipe right to open
       isSidebarExpanded.set(true);
     } else if (swipeDistance < 0 && $isSidebarExpanded) {
-      // Swipe left to close
       isSidebarExpanded.set(false);
     }
   }
@@ -70,43 +75,88 @@
   onMount(async () => {
     authStore.initializeFromStorage();
     settingsStore.initialize();
+    sessionUuidStore.initializeFromStorage();
     
-    // Generate session ID for unauthenticated users
     unauthenticatedSessionId = generateSessionId();
-    
-    // Apply theme
     document.documentElement.setAttribute('data-theme', $themeStore);
 
     const mediaQuery = window.matchMedia('(max-width: 768px)');
     isMobile = mediaQuery.matches;
-    const mediaQueryListener = (e: MediaQueryListEvent) => isMobile = e.matches;
-    mediaQuery.addEventListener('change', mediaQueryListener);
+    mediaQuery.addEventListener('change', (e) => isMobile = e.matches);
 
-    return () => {
-      mediaQuery.removeEventListener('change', mediaQueryListener);
-    }
+    await handlePathChange();
+    initializeApp();
   });
+
+  async function handlePathChange() {
+    const path = window.location.pathname;
+    const pathSegments = path.split('/').filter(Boolean);
+
+    if (pathSegments[0] === 'share' && pathSegments[1]) {
+      isSharedView = true;
+      await loadSharedConversation(pathSegments[1]);
+    } else {
+      isSharedView = false;
+      if (path.length > 1) {
+        const uuid = path.substring(1);
+        const sessionNumber = sessionUuidStore.getSessionNumberByUuid(uuid);
+        if (sessionNumber) {
+          await handleSelectHistory({ detail: { sessionNumber } });
+        }
+      }
+    }
+  }
+
+  async function loadSharedConversation(shareId: string, password?: string) {
+    chatStore.clearMessages();
+    chatStore.setLoading(true);
+    showPasswordModal = false;
+    passwordError = null;
+    passwordLoading = true;
+
+    try {
+      const history = await api.getSharedConversation(shareId, password);
+      chatStore.loadSessionMessages(history);
+    } catch (e: any) {
+      if (e.status === 401) {
+        showPasswordModal = true;
+        shareIdForPassword = shareId;
+        if (password) {
+          passwordError = e.message || 'Password required or incorrect.';
+        } else {
+          passwordError = null;
+        }
+      } else {
+        chatStore.addUserMessage("Sorry, this conversation could not be loaded.");
+        chatStore.startAIResponse("Error");
+        chatStore.updateStreamingMessage($chatStore.currentStreamingId!, e.message || 'An unknown error occurred.');
+        chatStore.finishStreaming($chatStore.currentStreamingId!);
+      }
+    } finally {
+      chatStore.setLoading(false);
+      passwordLoading = false;
+    }
+  }
+
+  async function handlePasswordSubmit(password: string) {
+    if (shareIdForPassword) {
+      await loadSharedConversation(shareIdForPassword, password);
+    }
+  }
   
-  // Watch theme changes
   $: if (theme) {
     document.documentElement.setAttribute('data-theme', theme);
   }
   
-  function handleLoadingComplete() {
-    currentView = 'main';
-    initializeApp();
-  }
-  
   async function initializeApp() {
+    if (isSharedView) return;
     try {
       if ($authStore.isAuthenticated) {
-        // Load settings and history for authenticated users
         await Promise.all([
           loadHistory(),
           analyticsStore.syncAnalytics(),
         ]);
         
-        // Create initial session if none exists
         if ($sessionStore.sessions.length === 0) {
           await createNewSession();
         }
@@ -145,35 +195,40 @@
   
   function handleAuthSuccess() {
     currentView = 'main';
-    // Only initialize app if user is actually authenticated (logged in)
     if ($authStore.isAuthenticated) {
       initializeApp();
     }
   }
   
   async function handleNewChat() {
+    isSharedView = false;
+    history.pushState({}, '', '/');
     chatStore.clearMessages();
     chatStore.setCreatingNewConversation(true);
     
     if ($authStore.isAuthenticated) {
       await createNewSession();
     } else {
-      // Generate new session ID for unauthenticated users
       unauthenticatedSessionId = generateSessionId();
     }
     chatStore.setCreatingNewConversation(false);
   }
   
   async function handleSelectHistory(event: CustomEvent<{ sessionNumber: number }>) {
+    isSharedView = false;
     const { sessionNumber } = event.detail;
     
     try {
-      // Set current session
       sessionStore.setCurrentSession(sessionNumber);
-      
-      // Load session messages
       const messages = await api.getSessionHistory(sessionNumber);
       chatStore.loadSessionMessages(messages);
+
+      const uuid = sessionUuidStore.getUuidBySessionNumber(sessionNumber);
+      if (uuid) {
+        history.pushState({}, '', `/${uuid}`);
+      } else {
+        history.pushState({}, '', '/');
+      }
     } catch (error) {
       console.error('Failed to load session history:', error);
     }
@@ -246,7 +301,7 @@
     } catch (error: any) {
       if (error.name === 'AbortError') {
         chatStore.interruptStreaming(messageId);
-        chatStore.setLoading(false); // Explicitly set loading to false
+        chatStore.setLoading(false);
         abortController = null;
       } else {
         onError(error);
@@ -255,6 +310,11 @@
   }
 
   async function handleChatSubmit(event: CustomEvent<{ message: string }>) {
+    if ($chatStore.isInitialState && $sessionStore.currentSession) {
+      const uuid = crypto.randomUUID();
+      sessionUuidStore.setSessionUuid($sessionStore.currentSession, uuid);
+      history.pushState({}, '', `/${uuid}`);
+    }
     const { message } = event.detail;
     chatStore.addUserMessage(message);
     await submitPrompt(message);
@@ -292,13 +352,12 @@
   }
 </script>
 
-{#if currentView === 'loading'}
-  <LoadingScreen onLoadingComplete={handleLoadingComplete} />
-{:else if currentView === 'auth'}
+{#if currentView === 'auth'}
   <Auth initialMode={authMode} on:back={handleAuthBack} on:success={handleAuthSuccess} />
 {:else}
   <main class="app" class:sidebar-expanded={$isSidebarExpanded}>
     <Sidebar 
+      disabled={isSharedView}
       on:newChat={handleNewChat}
       on:selectHistory={handleSelectHistory}
       on:logout={handleLogout}
@@ -311,15 +370,17 @@
       on:touchmove={handleTouchMove}
       on:touchend={handleTouchEnd}
     >
-      {#if isInitialState}
+      {#if isInitialState && !isSharedView}
         <div class="initial-state-container">
           <Welcome on:prompt={handleWelcomePrompt} />
-          <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
+          <div class="initial-chat-input-wrapper">
+            <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
+          </div>
           <PromptSuggestions on:select={handleSuggestionSelect} />
         </div>
       {:else}
-        <ChatContainer on:regenerate={handleRegenerate} />
-        <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
+        <ChatContainer {isSharedView} on:regenerate={handleRegenerate} />
+        <ChatInput disabled={isSharedView} on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
       {/if}
     </div>
 
@@ -343,9 +404,19 @@
     {#if $analyticsStore.isAnalyticsModalOpen}
       <AnalyticsModal />
     {/if}
-      {#if $isSidebarExpanded && isMobile}
-    <div class="mobile-sidebar-backdrop" on:click={toggleSidebar} />
-  {/if}
+    {#if $shareStore.isShareModalOpen}
+      <ShareModal />
+    {/if}
+    {#if showPasswordModal}
+      <PasswordPromptModal 
+        onPasswordSubmit={handlePasswordSubmit}
+        error={passwordError}
+        isLoading={passwordLoading}
+      />
+    {/if}
+    {#if $isSidebarExpanded && isMobile}
+      <div class="mobile-sidebar-backdrop" on:click={toggleSidebar} />
+    {/if}
   </main>
 {/if}
 
@@ -357,6 +428,11 @@
     justify-content: center;
     height: 100%;
     gap: 1.5rem;
+  }
+
+  .initial-chat-input-wrapper {
+    width: 100%;
+    max-width: 1152px; /* 768px * 1.5 */
   }
 
   .loading-overlay {

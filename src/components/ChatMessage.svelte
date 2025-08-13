@@ -8,6 +8,7 @@
 
   export let message: ChatMessage;
   export let isLastAiMessage: boolean = false;
+  export let isSharedView: boolean = false;
 
   let messageElement: HTMLDivElement;
   let mounted = false;
@@ -110,14 +111,14 @@
         <Copy size={16} />
       {/if}
     </button>
-    <button class="action-btn" title="Good response">
+    <button class="action-btn" title="Good response" disabled={isSharedView}>
       <ThumbsUp size={16} />
     </button>
-    <button class="action-btn" title="Bad response">
+    <button class="action-btn" title="Bad response" disabled={isSharedView}>
       <ThumbsDown size={16} />
     </button>
     {#if isLastAiMessage}
-      <button class="action-btn" on:click={handleRegenerate} title="Regenerate response">
+      <button class="action-btn" on:click={handleRegenerate} title="Regenerate response" disabled={isSharedView}>
         <RefreshCw size={16} />
       </button>
     {/if}
@@ -236,10 +237,15 @@
     transition: all 0.2s ease;
   }
 
-  .action-btn:hover {
+  .action-btn:hover:not(:disabled) {
     background: var(--hover-color);
     color: var(--text-color);
     border-color: var(--primary-color);
+  }
+
+  .action-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
   
   .ai-message :global(p) {

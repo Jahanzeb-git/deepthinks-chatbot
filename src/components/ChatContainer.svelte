@@ -4,6 +4,8 @@
   import ChatMessage from './ChatMessage.svelte';
   import CustomLoading from './CustomLoading.svelte';
   
+  export let isSharedView = false;
+
   let chatContainer: HTMLDivElement;
   let shouldAutoScroll = true;
 
@@ -52,6 +54,7 @@
       {#each messages as message (message.id)}
         <ChatMessage 
           {message} 
+          {isSharedView}
           isLastAiMessage={message.id === lastAiMessageId}
           on:regenerate={handleRegenerate} 
         />
