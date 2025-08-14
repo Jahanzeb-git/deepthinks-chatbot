@@ -252,7 +252,10 @@
   }
 
   .chat-input-container.initial-state {
-    /* This is now handled by the parent container in App.svelte */
+    min-height: 100px; /* Increased height by approx 30% */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
 
   .chat-input-container.chat-state {
@@ -274,6 +277,28 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     gap: 8px;
+  }
+
+  .chat-input-container.initial-state .input-wrapper {
+    flex-direction: column; /* Stack textarea and controls vertically */
+    align-items: flex-start; /* Align items to the start (left) */
+    padding-bottom: 8px; /* Adjust padding to push buttons down */
+    height: 100%; /* Take full height of container */
+  }
+
+  .chat-input-container.initial-state .chat-textarea {
+    flex-grow: 1; /* Allow textarea to take available space */
+    width: 100%; /* Ensure textarea takes full width */
+    margin-bottom: 8px; /* Space between textarea and buttons */
+  }
+
+  .chat-input-container.initial-state .controls-container {
+    width: 100%; /* Ensure controls take full width */
+    justify-content: flex-end; /* Push buttons to the right */
+  }
+
+  .chat-input-container.initial-state .send-button {
+    margin-left: auto; /* Push send button to the right */
   }
 
   .input-wrapper:focus-within {

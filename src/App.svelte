@@ -377,9 +377,13 @@
             <ChatInput on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
           </div>
           <PromptSuggestions on:select={handleSuggestionSelect} />
+          <div class="disclaimer">
+            <p>Deepthinks can make mistakes. Ask to clarify.</p>
+          </div>
         </div>
       {:else}
-        <ChatContainer {isSharedView} on:regenerate={handleRegenerate} />
+
+        <ChatContainer isSharedView={isSharedView} on:regenerate={handleRegenerate} />
         <ChatInput disabled={isSharedView} on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
       {/if}
     </div>
@@ -428,11 +432,20 @@
     justify-content: center;
     height: 100%;
     gap: 1.5rem;
+    position: relative;
   }
 
   .initial-chat-input-wrapper {
     width: 100%;
     max-width: 1152px; /* 768px * 1.5 */
+  }
+
+  .disclaimer {
+    position: absolute;
+    bottom: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: center;
   }
 
   .loading-overlay {

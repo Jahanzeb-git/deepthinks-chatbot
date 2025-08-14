@@ -3,6 +3,8 @@
   import { chatStore } from '../stores/chat';
   import ChatMessage from './ChatMessage.svelte';
   import CustomLoading from './CustomLoading.svelte';
+
+  import { Info } from 'lucide-svelte';
   
   export let isSharedView = false;
 
@@ -50,6 +52,18 @@
     class="chat-container"
     on:scroll={handleScroll}
   >
+    {#if isSharedView}
+      <div class="shared-view-info">
+        <div class="info-icon">
+          <Info size={20} />
+        </div>
+        <p>
+          You're viewing a shared conversation in read-only mode. All interactive elements are disabled. 
+          To engage with the full application and start your own conversation, please visit: 
+          <a href="https://deepthinks.netlify.app" target="_blank" rel="noopener noreferrer">https://deepthinks.netlify.app</a>
+        </p>
+      </div>
+    {/if}
     <div class="messages-wrapper">
       {#each messages as message (message.id)}
         <ChatMessage 
@@ -78,6 +92,43 @@
     padding: 2rem;
     background: var(--background-color);
     transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .shared-view-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 2rem;
+    max-width: 768px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .info-icon {
+    flex-shrink: 0;
+    color: var(--primary-color);
+    margin-top: 0.125rem;
+  }
+
+  .shared-view-info p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  .shared-view-info a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .shared-view-info a:hover {
+    text-decoration: underline;
   }
   
   .messages-wrapper {
@@ -126,6 +177,11 @@
   @media (max-width: 768px) {
     .chat-container {
       padding: 1rem;
+    }
+
+    .shared-view-info {
+      padding: 1rem;
+      margin-bottom: 1rem;
     }
     
     .messages-wrapper {
