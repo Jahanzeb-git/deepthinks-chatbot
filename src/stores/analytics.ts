@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { api } from '../lib/api';
+import { authStore } from './auth';
 
 export interface TokenUsage {
   timestamp: number;
@@ -19,13 +20,14 @@ function createAnalyticsStore() {
   }
 
   async function syncAnalytics() {
-    const storedUsageJSON = localStorage.getItem('tokenUsage');
-    const localUsage: TokenUsage[] = storedUsageJSON ? JSON.parse(storedUsageJSON) : [];
-    
-    const since = localUsage.length > 0 ? localUsage[localUsage.length - 1].timestamp : undefined;
+    const auth = get(authStore);
+    // First, reset everything to ensure a clean slate.
+    localStorage.removeItem('tokenUsage');
+    update(state => ({ ...state, tokenUsage: [] }));
 
     try {
-      const response = await api.getTokenUsage(since);
+      // Fetch the full history for the active key, not just recent.
+      const response = await api.getTokenUsage(auth.activeApiKeyIdentifier);
       if (response.ok && response.items) {
         const newUsage = response.items.map((item: any) => ({
           timestamp: item.timestamp,
@@ -34,20 +36,10 @@ function createAnalyticsStore() {
           outputTokens: item.outputTokens,
         }));
 
-        // Combine local and new usage, avoiding duplicates
-        const combinedUsage = [...localUsage];
-        const localTimestamps = new Set(localUsage.map(u => u.timestamp));
-        newUsage.forEach((usage: TokenUsage) => {
-          if (!localTimestamps.has(usage.timestamp)) {
-            combinedUsage.push(usage);
-          }
-        });
+        newUsage.sort((a, b) => a.timestamp - b.timestamp);
 
-        // Sort by timestamp to be sure
-        combinedUsage.sort((a, b) => a.timestamp - b.timestamp);
-
-        saveUsageToStorage(combinedUsage);
-        update(state => ({ ...state, tokenUsage: combinedUsage }));
+        saveUsageToStorage(newUsage);
+        update(state => ({ ...state, tokenUsage: newUsage }));
       }
     } catch (error) {
       console.error('Failed to sync analytics from backend:', error);
@@ -57,32 +49,35 @@ function createAnalyticsStore() {
   return {
     subscribe,
     openAnalyticsModal: () => {
-      const storedUsage = localStorage.getItem('tokenUsage');
-      if (storedUsage) {
-        update(state => ({ ...state, tokenUsage: JSON.parse(storedUsage) }));
-      }
       update(state => ({ ...state, isAnalyticsModalOpen: true }));
+      syncAnalytics(); // Always sync from a clean state when opening.
     },
     closeAnalyticsModal: () => update(state => ({ ...state, isAnalyticsModalOpen: false })),
     addTokenUsage: async (model: string, inputTokens: number, outputTokens: number) => {
+      const auth = get(authStore);
       const newUsage: TokenUsage = {
         timestamp: Date.now(),
         model,
         inputTokens,
         outputTokens,
       };
+      
+      // Add to local state immediately for responsiveness
       const currentState = get(analyticsStore);
       const updatedUsage = [...currentState.tokenUsage, newUsage];
       saveUsageToStorage(updatedUsage);
       update(state => ({ ...state, tokenUsage: updatedUsage }));
 
       try {
-        await api.postTokenUsage(newUsage);
+        await api.postTokenUsage(newUsage, auth.activeApiKeyIdentifier);
       } catch (error) {
         console.error('Failed to post token usage to backend:', error);
-        // Here you might want to implement a retry mechanism
-        // or store failed requests to send later.
       }
+    },
+
+    resetAnalytics: () => {
+      localStorage.removeItem('tokenUsage');
+      update(state => ({ ...state, tokenUsage: [] }));
     },
     syncAnalytics,
     set,

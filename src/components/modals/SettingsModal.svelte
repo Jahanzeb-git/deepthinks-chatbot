@@ -2,12 +2,14 @@
   import { settingsStore, type UserSettings } from '../../stores/settings';
   import { themeStore } from '../../stores/theme'; // USE THE REAL THEME STORE
   import { authStore } from '../../stores/auth'; // IMPORT THE AUTH STORE
+  import { analyticsStore } from '../../stores/analytics';
   import Modal from './Modal.svelte';
   import Toggle from '../shared/Toggle.svelte';
-  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft } from 'lucide-svelte';
+  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info } from 'lucide-svelte';
   import DataControlModal from './DataControlModal.svelte';
   import { get } from 'svelte/store';
-  import { tick } from 'svelte';
+  import { tick, onMount } from 'svelte';
+  import { api } from '../../lib/api'; // Import the API utility
 
   // Use a local variable for the input to avoid debouncing issues
   let nameInputValue: string = '';
@@ -18,6 +20,15 @@
   let showDeleteAccountModal = false;
   let isDataModalOpen = false;
   let isDeletingAccount = false;
+  let showDeleteApiKeyConfirmation = false; // New state for confirmation dialog
+
+  // Together AI API Key State
+  let togetherApiKeyInput: string = '';
+  let maskedTogetherApiKey: string | null = null;
+  let isVerifyingTogetherApiKey: boolean = false;
+  let togetherApiKeyFeedback: string | null = null;
+  let hasTogetherApiKey: boolean = false;
+  let apiKeyStatusMessage: string = 'App specific API key is in use.'; // New state for status message
 
   const sections = {
     General: { icon: User, description: 'Personalization & appearance' },
@@ -126,6 +137,105 @@
   function switchTab(tab: string) {
     activeTab = tab;
   }
+
+  async function fetchMaskedTogetherApiKey() {
+    togetherApiKeyFeedback = null;
+    try {
+      const token = localStorage.getItem('deepthinks_token');
+      if (!token) {
+        apiKeyStatusMessage = 'App specific API key is in use.';
+        maskedTogetherApiKey = null;
+        hasTogetherApiKey = false;
+        authStore.setActiveApiKeyIdentifier('_default');
+        return;
+      }
+      const response = await api.getUserKey();
+      if (response.api_key_masked) {
+        maskedTogetherApiKey = response.api_key_masked;
+        hasTogetherApiKey = true;
+        apiKeyStatusMessage = 'Your Personal API key is in use.';
+        authStore.setActiveApiKeyIdentifier(response.api_key_masked);
+      } else {
+        maskedTogetherApiKey = null;
+        hasTogetherApiKey = false;
+        apiKeyStatusMessage = 'App specific API key is in use.';
+        authStore.setActiveApiKeyIdentifier('_default');
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch masked API key:', error);
+      togetherApiKeyFeedback = `Error: ${error.message || 'Could not fetch API key status.'}`;
+      maskedTogetherApiKey = null;
+      hasTogetherApiKey = false;
+      apiKeyStatusMessage = 'App specific API key is in use.'; // Fallback to app key on error
+      authStore.setActiveApiKeyIdentifier('_default');
+    }
+  }
+
+  async function handleAddTogetherApiKey() {
+    togetherApiKeyFeedback = null;
+    isVerifyingTogetherApiKey = true;
+    try {
+      const token = localStorage.getItem('deepthinks_token');
+      if (!token) {
+        togetherApiKeyFeedback = 'Error: Authentication token missing.';
+        return;
+      }
+      const response = await api.postUserKey(togetherApiKeyInput);
+      togetherApiKeyFeedback = response.message;
+      if (response.message === "Together API key stored successfully") {
+        analyticsStore.resetAnalytics();
+        await fetchMaskedTogetherApiKey(); 
+        analyticsStore.syncAnalytics();
+        togetherApiKeyInput = ''; // Clear input on success
+      } else {
+        togetherApiKeyFeedback = `Error: ${response.message}`;
+      }
+    } catch (error: any) {
+      console.error('Failed to add API key:', error);
+      togetherApiKeyFeedback = `Error: ${error.message || 'An unknown error occurred.'}`;
+    } finally {
+      isVerifyingTogetherApiKey = false;
+    }
+  }
+
+  async function confirmRemoveTogetherApiKey() {
+    showDeleteApiKeyConfirmation = true;
+  }
+
+  async function handleRemoveTogetherApiKey() {
+    showDeleteApiKeyConfirmation = false;
+    togetherApiKeyFeedback = null;
+    isVerifyingTogetherApiKey = true; // Use this to disable buttons during removal too
+    try {
+      const token = localStorage.getItem('deepthinks_token');
+      if (!token) {
+        togetherApiKeyFeedback = 'Error: Authentication token missing.';
+        return;
+      }
+      const response = await api.deleteUserKey();
+      togetherApiKeyFeedback = response.message;
+      if (response.message === "Together API key removed successfully") {
+        maskedTogetherApiKey = null;
+        hasTogetherApiKey = false;
+        apiKeyStatusMessage = 'App specific API key is in use.';
+        analyticsStore.resetAnalytics();
+        authStore.setActiveApiKeyIdentifier('_default');
+        analyticsStore.syncAnalytics();
+      } else {
+        togetherApiKeyFeedback = `Error: ${response.message}`;
+      }
+    } catch (error: any) {
+      console.error('Failed to remove API key:', error);
+      togetherApiKeyFeedback = `Error: ${error.message || 'An unknown error occurred.'}`;
+    } finally {
+      isVerifyingTogetherApiKey = false;
+    }
+  }
+
+  onMount(async () => {
+    await fetchMaskedTogetherApiKey();
+    analyticsStore.syncAnalytics();
+  });
 </script>
 
 <Modal
@@ -355,6 +465,67 @@
                   </div>
                 </div>
 
+                <div class="setting-card">
+                  <div class="setting-header">
+                    <div class="setting-icon">
+                      <KeyRound size={20} />
+                    </div>
+                    <div class="setting-info">
+                      <h4 class="setting-title">Together AI API Key</h4>
+                      <p class="setting-desc">Add your personal Together AI API key for enhanced usage.</p>
+                    </div>
+                  </div>
+                  <div class="setting-control full">
+                    {#if hasTogetherApiKey}
+                      <div class="read-only-field">
+                        <span class="field-value">{maskedTogetherApiKey}</span>
+                      </div>
+                      <button 
+                        class="action-btn danger"
+                        on:click={confirmRemoveTogetherApiKey}
+                        disabled={isVerifyingTogetherApiKey}
+                      >
+                        <Trash2 size={16} />
+                        Remove
+                      </button>
+                    {:else}
+                      <input 
+                        type="password" 
+                        class="modern-input"
+                        placeholder="sk-xxxxxxxxxxxxxxxxxxxx"
+                        bind:value={togetherApiKeyInput}
+                        disabled={isVerifyingTogetherApiKey}
+                      />
+                      <button 
+                        class="action-btn primary"
+                        on:click={handleAddTogetherApiKey}
+                        disabled={isVerifyingTogetherApiKey || !togetherApiKeyInput.trim()}
+                      >
+                        {#if isVerifyingTogetherApiKey}
+                          <div class="spinner small"></div>
+                          Verifying...
+                        {:else}
+                          <Check size={16} />
+                          Add
+                        {/if}
+                      </button>
+                    {/if}
+                  </div>
+                  {#if togetherApiKeyFeedback}
+                    <p class="api-feedback-message" class:error={togetherApiKeyFeedback.startsWith('Error:')}>
+                      {togetherApiKeyFeedback}
+                    </p>
+                  {/if}
+                  <div class="api-key-notes">
+                    <p>To get API key navigate to <a href="https://together.ai" target="_blank" rel="noopener noreferrer">together.ai</a> and get API key, paste that key here.</p>
+                    <p>Your key will be Securely stored in the system with Security algorithm.</p>
+                  </div>
+                  <div class="api-key-status-message">
+                    <Info size={16} />
+                    <span>{apiKeyStatusMessage}</span>
+                  </div>
+                </div>
+
                 <div class="setting-card danger">
                   <div class="setting-header">
                     <div class="setting-icon">
@@ -440,6 +611,33 @@
   </Modal>
 {/if}
 
+{#if showDeleteApiKeyConfirmation}
+  <Modal isOpen={true} on:close={() => showDeleteApiKeyConfirmation = false} title="Remove API Key">
+    <div class="confirmation-modal">
+      <div class="confirmation-header">
+        <div class="confirmation-icon danger">
+          <AlertTriangle size={48} />
+        </div>
+        <h2 class="confirmation-title">Remove Together AI API Key?</h2>
+        <p class="confirmation-desc">This will remove your personal Together AI API key. The application will then use the default API key.</p>
+      </div>
+      <div class="confirmation-actions">
+        <button class="confirmation-btn secondary" on:click={() => showDeleteApiKeyConfirmation = false} disabled={isVerifyingTogetherApiKey}>
+          Cancel
+        </button>
+        <button class="confirmation-btn danger" on:click={handleRemoveTogetherApiKey} disabled={isVerifyingTogetherApiKey}>
+          {#if isVerifyingTogetherApiKey}
+            <div class="spinner small"></div>
+            Removing...
+          {:else}
+            <Trash2 size={16} />
+            Remove Key
+          {/if}
+        </button>
+      </div>
+    </div>
+  </Modal>
+{/if}
 <style>
   /* Widen the modal on larger screens and remove the hardcoded background */
   :global(.settings-modal) {
@@ -734,6 +932,12 @@
     flex: 1;
     overflow-y: auto;
     padding: 2rem;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .settings-content::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   /* Section Styling */
@@ -851,6 +1055,8 @@
 
   .setting-info {
     flex: 1;
+    min-width: 0; /* Ensure it can shrink */
+    overflow-wrap: break-word; /* Ensure long words break */
   }
 
   .setting-title {
@@ -871,10 +1077,39 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap; /* Allow items to wrap if space is constrained */
   }
 
   .setting-control.full {
     width: 100%;
+  }
+
+  /* Ensure the read-only-field behaves well within the flex container */
+  .setting-control .read-only-field {
+    flex: 1 1 auto; /* Allow it to grow and shrink, with a flexible basis */
+    min-width: 0; /* Crucial for flex items to shrink below their content size */
+  }
+
+  /* Ensure the action button doesn't get too small */
+  .setting-control .action-btn {
+    flex-shrink: 0; /* Prevent button from shrinking */
+  }
+
+  @media (max-width: 768px) {
+    .setting-control {
+      flex-direction: column; /* Stack items vertically on mobile for better layout */
+      align-items: flex-start; /* Align items to the start */
+      width: 100%; /* Take full width */
+    }
+
+    .setting-control .read-only-field {
+      width: 100%; /* Take full width when stacked */
+      margin-bottom: 0.5rem; /* Add some space below the field */
+    }
+
+    .setting-control .action-btn {
+      width: 100%; /* Make button full width when stacked */
+    }
   }
 
   .input-wrapper {
@@ -995,7 +1230,16 @@
     background: var(--background-color);
     border: 1.5px solid var(--border-color);
     border-radius: 8px;
-    min-width: 200px;
+    min-width: 0; /* Allow shrinking */
+    overflow-x: auto; /* Enable horizontal scrolling */
+    white-space: nowrap; /* Prevent text wrapping */
+    flex-shrink: 1; /* Allow it to shrink within flex container */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .read-only-field::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   .field-value {
@@ -1057,6 +1301,51 @@
     font-size: 0.875rem;
     min-width: 60px;
     text-align: center;
+  }
+
+  .api-feedback-message {
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background-color: rgba(102, 126, 234, 0.1);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color-translucent);
+  }
+
+  .api-feedback-message.error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+  }
+
+  .api-key-notes {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 1rem;
+    line-height: 1.4;
+  }
+
+  .api-key-notes a {
+    color: var(--primary-color);
+    text-decoration: none;
+  }
+
+  .api-key-notes a:hover {
+    text-decoration: underline;
+  }
+
+  .api-key-status-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--surface-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
   }
 
   .modal-footer {
@@ -1188,12 +1477,13 @@
     }
 
     .settings-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr; /* Force single column on mobile */
       gap: 1rem;
     }
 
     .setting-card {
       padding: 1.25rem;
+      min-width: 0; /* Ensure it can shrink */
     }
 
     .setting-header {

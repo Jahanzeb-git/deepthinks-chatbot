@@ -12,13 +12,15 @@ export interface AuthState {
   isSignedUp: boolean;
   user: User | null;
   token: string | null;
+  activeApiKeyIdentifier: string;
 }
 
 const initialState: AuthState = {
   isAuthenticated: false,
   isSignedUp: false,
   user: null,
-  token: null
+  token: null,
+  activeApiKeyIdentifier: '_default',
 };
 
 function createAuthStore() {
@@ -46,7 +48,8 @@ function createAuthStore() {
         isAuthenticated: true,
         isSignedUp: true,
         user,
-        token
+        token,
+        activeApiKeyIdentifier: '_default' // Reset to default on login
       }));
     },
     logout: () => {
@@ -59,7 +62,8 @@ function createAuthStore() {
         ...state,
         isAuthenticated: false,
         user: null,
-        token: null
+        token: null,
+        activeApiKeyIdentifier: '_default' // Reset to default
         // isSignedUp remains true
       }));
     },
@@ -91,7 +95,13 @@ function createAuthStore() {
       localStorage.removeItem('deepthinks_signed_up');
       set(initialState);
     },
-    initializeFromStorage: () => {
+    setActiveApiKeyIdentifier: (identifier: string) => {
+      update(state => ({
+        ...state,
+        activeApiKeyIdentifier: identifier,
+      }));
+    },
+    initializeFromStorage: async () => {
       const token = localStorage.getItem('deepthinks_token');
       const userStr = localStorage.getItem('deepthinks_user');
       const signedUp = localStorage.getItem('deepthinks_signed_up') === 'true';
@@ -106,8 +116,17 @@ function createAuthStore() {
             user,
             token
           }));
+
+          // After authenticating, fetch the user's key status
+          const keyResponse = await api.getUserKey();
+          if (keyResponse && keyResponse.api_key_masked) {
+            update(state => ({ ...state, activeApiKeyIdentifier: keyResponse.api_key_masked }));
+          } else {
+            update(state => ({ ...state, activeApiKeyIdentifier: '_default' }));
+          }
+
         } catch (e) {
-          console.error('Failed to parse user data from localStorage');
+          console.error('Failed to initialize auth from storage:', e);
           // Clear corrupted data
           localStorage.removeItem('deepthinks_token');
           localStorage.removeItem('deepthinks_user');

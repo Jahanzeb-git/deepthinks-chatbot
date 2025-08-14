@@ -73,8 +73,7 @@ export const api = {
 
   // Session Management
   async createSession() {
-    const response = await makeRequest('/session_inc');
-    return response;
+    return makeRequest('/session_inc');
   },
 
   // Chat
@@ -221,27 +220,30 @@ export const api = {
   },
 
   // Analytics
-  async postTokenUsage(usage: any) {
+
+  async postTokenUsage(usage: any, apiKeyIdentifier: string) {
     const auth = get(authStore);
     if (!auth.user?.email) {
       throw new Error('User email is not available');
     }
+    const usageWithIdentifier = { ...usage, api_key_identifier: apiKeyIdentifier };
     return makeRequest('/api/token-usage', {
       method: 'POST',
       headers: {
         'X-User-Email': auth.user.email,
       },
-      body: JSON.stringify(usage),
+      body: JSON.stringify(usageWithIdentifier),
     });
   },
 
-  async getTokenUsage(since?: number, limit?: number, offset?: number) {
+  async getTokenUsage(apiKeyIdentifier: string, since?: number, limit?: number, offset?: number) {
     const auth = get(authStore);
     if (!auth.user?.email) {
       throw new Error('User email is not available');
     }
     const params = new URLSearchParams({
       email: auth.user.email,
+      api_key_identifier: apiKeyIdentifier,
     });
     if (since) params.set('since', since.toString());
     if (limit) params.set('limit', limit.toString());
@@ -274,5 +276,23 @@ export const api = {
       throw new APIError(response.status, errorData.message || 'Failed to fetch shared conversation.');
     }
     return response.json();
+  },
+
+  // Together AI API Key
+  async getUserKey() {
+    return makeRequest('/user/key');
+  },
+
+  async postUserKey(apiKey: string) {
+    return makeRequest('/user/key', {
+      method: 'POST',
+      body: JSON.stringify({ api_key: apiKey })
+    });
+  },
+
+  async deleteUserKey() {
+    return makeRequest('/user/key', {
+      method: 'DELETE'
+    });
   }
 };

@@ -73,7 +73,7 @@
   }
   
   onMount(async () => {
-    authStore.initializeFromStorage();
+    await authStore.initializeFromStorage();
     settingsStore.initialize();
     sessionUuidStore.initializeFromStorage();
     
