@@ -313,13 +313,14 @@
     outline: none;
     resize: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 16px; /* Increased font size */
+    line-height: 1.6;
     color: var(--text-color, #1f2937);
-    max-height: 120px;
-    min-height: 20px;
+    max-height: 150px; /* Increased max-height */
+    min-height: 24px; /* Increased min-height */
     overflow-y: auto;
     padding: 0;
+    transition: height 0.2s ease; /* Added transition */
   }
 
   .chat-textarea::placeholder {
