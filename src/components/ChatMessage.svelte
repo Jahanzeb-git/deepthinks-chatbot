@@ -20,61 +20,73 @@
     regenerate: { messageId: string }
   }>();
 
-  type RenderedBlock = {
-    id: number;
-    type: 'text' | 'file' | 'conclusion' | 'file_text';
+  type Segment = {
+    type: 'normal' | 'thinking';
     content: string;
-    filename?: string;
   };
 
-  let renderedBlocks: RenderedBlock[] = [];
+  type CodeBlock = {
+    id: number;
+    type: 'text' | 'file' | 'conclusion';
+    content: string; // For text/conclusion
+    file?: { // For file type
+      fileName: string;
+      fileCode: string;
+      fileText: string;
+    };
+  };
+
+  let segments: Segment[] = [];
+  let codeBlocks: CodeBlock[] = [];
 
   $: {
-    if (message.type === 'ai' && message.mode === 'code') {
-      renderedBlocks = parseCodeStream(message.content);
-    } else if (message.type === 'ai') {
-      const parts = message.content.split(/(<think>|<\/think>)/g);
-      const newSegments = [];
-      let inThinkingBlock = false;
-      for (const part of parts) {
-        if (part === '<think>') inThinkingBlock = true;
-        else if (part === '</think>') inThinkingBlock = false;
-        else if (part) newSegments.push({ type: inThinkingBlock ? 'thinking' : 'normal', content: part });
+    if (message.type === 'ai') {
+      if (message.mode === 'code') {
+        try {
+          const parsed = JSON.parse(message.content);
+          const newBlocks: CodeBlock[] = [];
+          let idCounter = 0;
+
+          if (parsed.Text) {
+            newBlocks.push({ id: idCounter++, type: 'text', content: parsed.Text });
+          }
+
+          if (parsed.Files && Array.isArray(parsed.Files)) {
+            for (const file of parsed.Files) {
+              newBlocks.push({ id: idCounter++, type: 'file', content: '', file });
+            }
+          }
+
+          if (parsed.Conclusion) {
+            newBlocks.push({ id: idCounter++, type: 'conclusion', content: parsed.Conclusion });
+          }
+          codeBlocks = newBlocks;
+        } catch (e) {
+          // JSON is likely incomplete, do nothing until it's valid
+          codeBlocks = [];
+        }
+      } else {
+        const parts = message.content.split(/(<think>|<\/think>)/g);
+        const newSegments: Segment[] = [];
+        let inThinkingBlock = false;
+        for (const part of parts) {
+          if (part === '<think>') {
+            inThinkingBlock = true;
+          } else if (part === '</think>') {
+            inThinkingBlock = false;
+          } else if (part) {
+            newSegments.push({ type: inThinkingBlock ? 'thinking' : 'normal', content: part });
+          }
+        }
+        segments = newSegments;
       }
-      renderedBlocks = [{ id: 0, type: 'text', content: newSegments.map(s => s.content).join('') }];
     }
   }
 
-  function parseCodeStream(content: string): RenderedBlock[] {
-    // This is a rudimentary parser and may not be fully robust.
-    const blocks: RenderedBlock[] = [];
-    let idCounter = 0;
-
-    const textContent = content.match(/"Text":\s*"(.*?)"/s)?.[1] || '';
-    if (textContent) {
-        blocks.push({ id: idCounter++, type: 'text', content: textContent.replace(/\\n/g, '\n') });
+  function openArtifact(file: any) {
+    if (file) {
+      artifactStore.open(file.FileName, file.FileCode);
     }
-
-    const filesContent = content.match(/"Files":\s*\[(.*?)\]/s)?.[1] || '';
-    if (filesContent) {
-        const fileRegex = /\{\s*\"FileName\":\s*\"(.*?)\",\s*\"FileCode\":\s*\"(.*?)\",\s*\"FileText\":\s*\"(.*?)\"\s*\}\s*/gs;
-        let match;
-        while ((match = fileRegex.exec(filesContent)) !== null) {
-            const [_, fileName, fileCode, fileText] = match;
-            blocks.push({ id: idCounter++, type: 'file', content: '', filename: fileName });
-            artifactStore.open(fileName, fileCode.replace(/\\n/g, '\n').replace(/\\\"/g, '"'));
-            if (fileText) {
-                blocks.push({ id: idCounter++, type: 'file_text', content: fileText.replace(/\\n/g, '\n') });
-            }
-        }
-    }
-
-    const conclusionContent = content.match(/"Conclusion":\s*"(.*?)"/s)?.[1] || '';
-    if (conclusionContent) {
-        blocks.push({ id: idCounter++, type: 'conclusion', content: conclusionContent.replace(/\\n/g, '\n') });
-    }
-
-    return blocks;
   }
 
   $: tokenCount = message.tokenCount !== undefined
@@ -116,21 +128,36 @@
     {#if message.type === 'ai'}
       {#if message.mode === 'code'}
         <div class="code-message" use:renderMath>
-          {#each renderedBlocks as block (block.id)}
-            {#if block.type === 'text' || block.type === 'conclusion' || block.type === 'file_text'}
+          {#each codeBlocks as block (block.id)}
+            {#if block.type === 'text' || block.type === 'conclusion'}
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
-            {:else if block.type === 'file'}
-              <FileCard filename={block.filename || ''} />
+            {:else if block.type === 'file' && block.file}
+              <div class="file-block">
+                <button class="file-card-button" on:click={() => openArtifact(block.file)}>
+                  <FileCard filename={block.file.fileName} />
+                </button>
+                {#if block.file.fileText}
+                  <div class="markdown-content file-text">{@html renderMarkdown(block.file.fileText)}</div>
+                {/if}
+              </div>
             {/if}
           {/each}
-          {#if message.isStreaming && renderedBlocks.length === 0}
+          {#if message.isStreaming && codeBlocks.length === 0}
             <span class="cursor">|</span>
           {/if}
         </div>
       {:else}
         <div class="ai-message" use:renderMath>
-          {@html renderMarkdown(message.content)} 
-          {#if message.isStreaming}<span class="cursor">|</span>{/if}
+          {#each segments as segment}
+            {#if segment.type === 'thinking'}
+              <ReasoningBlock content={segment.content} streaming={message.isStreaming} />
+            {:else if segment.content}
+              {@html renderMarkdown(segment.content)}
+            {/if}
+          {/each}
+          {#if message.isStreaming && !segments.some(s => s.type === 'thinking')}
+            <span class="cursor">|</span>
+          {/if}
         </div>
       {/if}
     {:else}
@@ -164,39 +191,13 @@
 {/if}
 
 <style>
-  .message-container {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-    opacity: 0;
-    transform: translateY(10px);
-    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  }
+  .message-container { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; opacity: 0; transform: translateY(10px); animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
   .message-container.mounted { opacity: 1; transform: translateY(0); }
-  .message-avatar {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 0.25rem;
-  }
+  .message-avatar { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 0.25rem; }
   .user .message-avatar { background: var(--primary-color); color: white; }
   .message-container.ai { gap: 0; }
   .message-content { flex: 1; min-width: 0; text-align: left; }
-  .user-message {
-    background: var(--primary-color);
-    color: white;
-    padding: 0.75rem 1rem;
-    border-radius: 18px 18px 4px 18px;
-    font-weight: 500;
-    word-wrap: break-word;
-    display: inline-block;
-    max-width: 100%;
-    font-family: 'Nunito', sans-serif;
-  }
+  .user-message { background: var(--primary-color); color: white; padding: 0.75rem 1rem; border-radius: 18px 18px 4px 18px; font-weight: 500; word-wrap: break-word; display: inline-block; max-width: 100%; font-family: 'Nunito', sans-serif; }
   .ai-message, .code-message { font-family: 'Nunito', sans-serif; line-height: 1.6; color: var(--text-color); word-wrap: break-word; max-width: 100%; text-align: left; }
   .message-actions { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
   .interrupted-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); margin-left: auto; font-style: italic; padding: 0.25rem 0.5rem; border-radius: 6px; background-color: var(--hover-color); }
@@ -207,6 +208,9 @@
   .ai-message :global(p), .code-message :global(p) { margin: 0 0 1rem 0; }
   .ai-message :global(p:last-child), .code-message :global(p:last-child) { margin-bottom: 0; }
   .cursor { animation: blink 1s infinite; color: var(--primary-color); font-weight: bold; }
+  .file-block { margin: 0.5rem 0; }
+  .file-card-button { background: none; border: none; padding: 0; cursor: pointer; display: block; width: 100%; text-align: left; }
+  .file-text { padding: 0.5rem; margin-top: 0.5rem; background: var(--surface-color); border-radius: 8px; }
   @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 </style>
