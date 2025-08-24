@@ -9,7 +9,10 @@ export interface ChatMessage {
   interrupted?: boolean;
   tokenCount?: number;
   model?: string;
+  mode?: 'default' | 'reason' | 'code';
 }
+
+export const isCodingMode = writable(false);
 
 export interface ChatState {
   messages: ChatMessage[];
@@ -48,7 +51,7 @@ function createChatStore() {
       }));
       return messageId;
     },
-    startAIResponse: (model: string) => {
+    startAIResponse: (model: string, mode: 'default' | 'reason' | 'code') => {
       const messageId = crypto.randomUUID();
       update(state => ({
         ...state,
@@ -58,7 +61,8 @@ function createChatStore() {
           content: '',
           timestamp: new Date(),
           isStreaming: true,
-          model: model
+          model: model,
+          mode: mode
         }],
         isLoading: true, // This should be true when starting
         isStreaming: true,
@@ -141,11 +145,21 @@ function createChatStore() {
           content: msg.prompt,
           timestamp: new Date(msg.timestamp)
         });
+
+        let mode: ChatMessage['mode'] = 'default';
+        try {
+          const parsed = JSON.parse(msg.response);
+          if (parsed && typeof parsed === 'object' && ('Files' in parsed || 'Conclusion' in parsed)) {
+            mode = 'code';
+          }
+        } catch (e) { /* Not a JSON object, so default mode */ }
+
         chatMessages.push({
           id: crypto.randomUUID(),
           type: 'ai',
           content: msg.response,
-          timestamp: new Date(msg.timestamp)
+          timestamp: new Date(msg.timestamp),
+          mode: mode
         });
       });
       

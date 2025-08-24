@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { ArrowUp, Mic, Upload, BrainCircuit, Square } from 'lucide-svelte';
-  import { chatStore } from '../stores/chat';
+  import { ArrowUp, Mic, Upload, BrainCircuit, Square, Code } from 'lucide-svelte';
+  import { chatStore, isCodingMode } from '../stores/chat';
   import { settingsStore } from '../stores/settings';
   import { authStore } from '../stores/auth';
   import { fileStore } from '../stores/file';
@@ -11,7 +11,7 @@
   export let disabled = false;
 
   const dispatch = createEventDispatcher<{
-    submit: { message: string };
+    submit: { message: string; reason: 'default' | 'reason' | 'code' };
     interrupt: void;
   }>();
 
@@ -25,6 +25,7 @@
   $: isLoading = $chatStore.isLoading;
   $: isStreaming = $chatStore.isStreaming;
   $: reasoning = $settingsStore.settings.reasoning;
+  $: codingMode = $isCodingMode;
   $: isAuthenticated = $authStore.isAuthenticated;
   $: fileStatus = $fileStore.status;
 
@@ -88,7 +89,8 @@
 
   function handleSubmit() {
     if (message.trim() && !isStreaming) {
-      dispatch('submit', { message: message.trim() });
+      const reason = codingMode ? 'code' : reasoning ? 'reason' : 'default';
+      dispatch('submit', { message: message.trim(), reason });
       message = '';
       clearDraft();
       if (textareaElement) {
@@ -156,6 +158,10 @@
   function toggleReasoning() {
     settingsStore.toggleReasoning();
   }
+
+  function toggleCodingMode() {
+    isCodingMode.update(v => !v);
+  }
 </script>
 
 <fieldset {disabled} class="chat-input-fieldset">
@@ -197,6 +203,21 @@
             >
               <BrainCircuit size={16} />
               <span class="reasoning-text">Reasoning</span>
+            </button>
+          </Tooltip>
+        </div>
+
+        <div class="tooltip-wrapper">
+          <Tooltip text="Enable DeepCode Mode" position="top" enabled={!isAuthenticated}>
+            <button 
+              class="reasoning-toggle" 
+              class:active={codingMode} 
+              on:click={toggleCodingMode} 
+              aria-label="Toggle DeepCode Mode"
+              disabled={!isAuthenticated || disabled}
+            >
+              <Code size={16} />
+              <span class="reasoning-text">DeepCode</span>
             </button>
           </Tooltip>
         </div>

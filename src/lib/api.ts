@@ -80,7 +80,7 @@ export const api = {
   async sendMessage(
     sessionId: string, 
     query: string, 
-    reason: boolean = false, 
+    reason: 'default' | 'reason' | 'code' = 'default', 
     signal: AbortSignal,
     onData: (data: { token: string, trace: boolean }) => void,
     onEnd: () => void,

@@ -11,6 +11,7 @@
   import { analyticsStore } from './stores/analytics';
   import { sessionUuidStore } from './stores/sessionUuid';
   import { shareStore } from './stores/share';
+  import { artifactStore } from './stores/artifact';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   
@@ -28,6 +29,7 @@
   import PromptSuggestions from './components/presentation/PromptSuggestions.svelte';
   import CustomLoading from './components/CustomLoading.svelte';
   import AuthButton from './components/AuthButton.svelte';
+  import CodeArtifact from './components/shared/CodeArtifact.svelte';
   
   let currentView: 'main' | 'auth' = 'main';
   let isSharedView = false;
@@ -128,7 +130,7 @@
         }
       } else {
         chatStore.addUserMessage("Sorry, this conversation could not be loaded.");
-        chatStore.startAIResponse("Error");
+        chatStore.startAIResponse("Error", 'default');
         chatStore.updateStreamingMessage($chatStore.currentStreamingId!, e.message || 'An unknown error occurred.');
         chatStore.finishStreaming($chatStore.currentStreamingId!);
       }
@@ -241,11 +243,11 @@
     unauthenticatedSessionId = generateSessionId();
   }
   
-  async function submitPrompt(message: string) {
+  async function submitPrompt(message: string, reason: 'default' | 'reason' | 'code' = 'default') {
     abortController = new AbortController();
     
-    const model = $settingsStore.settings.reasoning ? 'Reasoning' : 'Default';
-    const messageId = chatStore.startAIResponse(model);
+    const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
+    const messageId = chatStore.startAIResponse(model, reason);
     let accumulatedContent = '';
     let firstTokenReceived = false;
     let streamEnded = false;
@@ -262,6 +264,10 @@
     const onEnd = async () => {
       if (streamEnded) return;
       streamEnded = true;
+
+      if (reason === 'code') {
+        artifactStore.close();
+      }
 
       const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
       chatStore.finishStreaming(messageId, tokenCount);
@@ -281,6 +287,9 @@
       
       chatStore.updateStreamingMessage(messageId, errorMessage);
       chatStore.finishStreaming(messageId);
+      if (reason === 'code') {
+        artifactStore.close();
+      }
       abortController = null;
     };
 
@@ -292,7 +301,7 @@
       await api.sendMessage(
         sessionId, 
         message, 
-        $settingsStore.settings.reasoning, 
+        reason, 
         abortController.signal,
         onData,
         onEnd,
@@ -302,6 +311,9 @@
       if (error.name === 'AbortError') {
         chatStore.interruptStreaming(messageId);
         chatStore.setLoading(false);
+        if (reason === 'code') {
+          artifactStore.close();
+        }
         abortController = null;
       } else {
         onError(error);
@@ -309,15 +321,15 @@
     }
   }
 
-  async function handleChatSubmit(event: CustomEvent<{ message: string }>) {
+  async function handleChatSubmit(event: CustomEvent<{ message: string; reason: 'default' | 'reason' | 'code' }>) {
     if ($chatStore.isInitialState && $sessionStore.currentSession) {
       const uuid = crypto.randomUUID();
       sessionUuidStore.setSessionUuid($sessionStore.currentSession, uuid);
       history.pushState({}, '', `/${uuid}`);
     }
-    const { message } = event.detail;
+    const { message, reason } = event.detail;
     chatStore.addUserMessage(message);
-    await submitPrompt(message);
+    await submitPrompt(message, reason);
   }
 
   async function handleWelcomePrompt(event: CustomEvent<string>) {
@@ -395,6 +407,13 @@
     {/if}
     
     <AuthButton onAuthClick={handleAuthClick} />
+
+    <CodeArtifact 
+      show={$artifactStore.show}
+      filename={$artifactStore.filename}
+      code={$artifactStore.code}
+      on:close={() => artifactStore.close()}
+    />
 
     {#if $settingsStore.isCustomizeModalOpen}
       <CustomizeBehaviorModal />
