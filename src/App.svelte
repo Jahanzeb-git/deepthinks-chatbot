@@ -248,6 +248,25 @@
     
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
     const messageId = chatStore.startAIResponse(model, reason);
+    if (reason === 'code') {
+      const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
+      if (currentMessage?.parser) {
+        currentMessage.parser.setCallbacks({
+          onFieldStart: (field) => {
+            console.log(`Started streaming field: ${field}`);
+          },
+          onFieldContent: (field, content, isComplete) => {
+            if (field === 'FileCode' && !isComplete) {
+              // Stream code to artifact in real-time
+              artifactStore.appendCode(content.slice(currentMessage.streamingState?.fieldContents.Files[currentMessage.streamingState.activeFileIndex]?.FileCode?.length || 0));
+            }
+          },
+          onFileStart: (fileIndex) => {
+            console.log(`Started streaming file at index: ${fileIndex}`);
+          }
+        });
+      }
+    }
     let accumulatedContent = '';
     let firstTokenReceived = false;
     let streamEnded = false;
@@ -259,6 +278,15 @@
       }
       accumulatedContent += data.token;
       chatStore.updateStreamingMessage(messageId, accumulatedContent);
+
+      // Handle streaming code mode
+      if (reason === 'code') {
+        const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
+          if (currentMessage?.parser) {
+          const streamingState = currentMessage.parser.processChunk(data.token);
+          chatStore.updateStreamingCodeMessage(messageId, streamingState);
+        }
+      }
     };
 
     const onEnd = async () => {

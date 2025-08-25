@@ -1,14 +1,21 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount, createEventDispatcher, tick } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
   import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
+  import { StreamingJsonParser, type StreamingCodeState } from '../lib/streamingJsonParser';
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
   import FileCard from './shared/FileCard.svelte';
 
-  export let message: ChatMessage;
+  // Define StreamingCodeMessage type locally
+  interface StreamingCodeMessage extends ChatMessage {
+    streamingState?: StreamingCodeState;
+    parser?: StreamingJsonParser;
+  }
+
+  export let message: ChatMessage | StreamingCodeMessage;
   export let isLastAiMessage: boolean = false;
   export let isSharedView: boolean = false;
 
@@ -20,16 +27,12 @@
     regenerate: { messageId: string }
   }>();
 
-  type Segment = {
-    type: 'normal' | 'thinking';
-    content: string;
-  };
-
+  type Segment = { type: 'normal' | 'thinking'; content: string; };
   type CodeBlock = {
     id: number;
     type: 'text' | 'file' | 'conclusion';
-    content: string; // For text/conclusion
-    file?: { // For file type
+    content: string; 
+    file?: { 
       fileName: string;
       fileCode: string;
       fileText: string;
@@ -38,54 +41,112 @@
 
   let segments: Segment[] = [];
   let codeBlocks: CodeBlock[] = [];
-
+  let streamingParser: StreamingJsonParser | null = null;
+  
   $: {
     if (message.type === 'ai') {
       if (message.mode === 'code') {
-        try {
-          const parsed = JSON.parse(message.content);
-          const newBlocks: CodeBlock[] = [];
-          let idCounter = 0;
+        // Handle streaming code mode
+        if ('streamingState' in message && message.streamingState) {
+          // Use streaming state directly for progressive rendering
+          const streamingState = message.streamingState;
+          codeBlocks = buildCodeBlocksFromStreamingState(streamingState);
+        } else {
+          // Fallback to traditional parsing for complete messages
+          try {
+            const parsed = JSON.parse(message.content);
+            const newBlocks: CodeBlock[] = [];
+            let idCounter = 0;
 
-          if (parsed.Text) {
-            newBlocks.push({ id: idCounter++, type: 'text', content: parsed.Text });
-          }
-
-          if (parsed.Files && Array.isArray(parsed.Files)) {
-            for (const file of parsed.Files) {
-              newBlocks.push({ id: idCounter++, type: 'file', content: '', file });
+            if (parsed.Text) {
+              newBlocks.push({ id: idCounter++, type: 'text', content: parsed.Text });
             }
-          }
 
-          if (parsed.Conclusion) {
-            newBlocks.push({ id: idCounter++, type: 'conclusion', content: parsed.Conclusion });
+            if (parsed.Files && Array.isArray(parsed.Files)) {
+              for (const file of parsed.Files) {
+                if (file.FileName) {
+                  newBlocks.push({ 
+                    id: idCounter++, 
+                    type: 'file', 
+                    content: file.FileText || '', 
+                    file: {
+                      fileName: file.FileName,
+                      fileCode: file.FileCode || '',
+                      fileText: file.FileText || ''
+                    } 
+                  });
+                }
+              }
+            }
+
+            if (parsed.Conclusion) {
+              newBlocks.push({ id: idCounter++, type: 'conclusion', content: parsed.Conclusion });
+            }
+            codeBlocks = newBlocks;
+          } catch (e) {
+            // It's an incomplete JSON string, so we don't do anything yet.
+            // The final complete JSON will parse correctly and render the full content.
           }
-          codeBlocks = newBlocks;
-        } catch (e) {
-          // JSON is likely incomplete, do nothing until it's valid
-          codeBlocks = [];
         }
       } else {
+        // Handle default and reason modes with existing logic
         const parts = message.content.split(/(<think>|<\/think>)/g);
         const newSegments: Segment[] = [];
         let inThinkingBlock = false;
         for (const part of parts) {
-          if (part === '<think>') {
-            inThinkingBlock = true;
-          } else if (part === '</think>') {
-            inThinkingBlock = false;
-          } else if (part) {
-            newSegments.push({ type: inThinkingBlock ? 'thinking' : 'normal', content: part });
-          }
+          if (part === '<think>') inThinkingBlock = true;
+          else if (part === '</think>') inThinkingBlock = false;
+          else if (part) newSegments.push({ type: inThinkingBlock ? 'thinking' : 'normal', content: part });
         }
         segments = newSegments;
       }
     }
   }
 
+  function buildCodeBlocksFromStreamingState(state: StreamingCodeState): CodeBlock[] {
+    const blocks: CodeBlock[] = [];
+    let idCounter = 0;
+
+    // Add Text block if visible and has content
+    if (state.renderingStates.textVisible && state.fieldContents.Text) {
+      blocks.push({
+        id: idCounter++,
+        type: 'text',
+        content: state.fieldContents.Text
+      });
+    }
+
+    // Add File blocks
+    state.fieldContents.Files.forEach((file, index) => {
+      if (state.renderingStates.filesVisible[index] && file.FileName) {
+        blocks.push({
+          id: idCounter++,
+          type: 'file',
+          content: file.FileText || '',
+          file: {
+            fileName: file.FileName,
+            fileCode: file.FileCode || '',
+            fileText: file.FileText || ''
+          }
+        });
+      }
+    });
+
+    // Add Conclusion block
+    if (state.renderingStates.conclusionVisible && state.fieldContents.Conclusion) {
+      blocks.push({
+        id: idCounter++,
+        type: 'conclusion',
+        content: state.fieldContents.Conclusion
+      });
+    }
+
+    return blocks;
+  }
+
   function openArtifact(file: any) {
     if (file) {
-      artifactStore.open(file.FileName, file.FileCode);
+      artifactStore.open(file.fileName, file.fileCode);
     }
   }
 
@@ -109,6 +170,22 @@
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   });
+
+  // Helper function to check if message is streaming code mode
+  function isStreamingCodeMode(): boolean {
+    return message.mode === 'code' && message.isStreaming && 'streamingState' in message;
+  }
+
+  // Helper function to check if we should show streaming cursor
+  function shouldShowStreamingCursor(): boolean {
+    if (!message.isStreaming) return false;
+    
+    if (message.mode === 'code') {
+      return isStreamingCodeMode() && codeBlocks.length === 0;
+    } else {
+      return !segments.some(s => s.type === 'thinking');
+    }
+  }
 
 </script>
 
@@ -142,7 +219,7 @@
               </div>
             {/if}
           {/each}
-          {#if message.isStreaming && codeBlocks.length === 0}
+          {#if shouldShowStreamingCursor()}
             <span class="cursor">|</span>
           {/if}
         </div>
@@ -155,7 +232,7 @@
               {@html renderMarkdown(segment.content)}
             {/if}
           {/each}
-          {#if message.isStreaming && !segments.some(s => s.type === 'thinking')}
+          {#if shouldShowStreamingCursor()}
             <span class="cursor">|</span>
           {/if}
         </div>

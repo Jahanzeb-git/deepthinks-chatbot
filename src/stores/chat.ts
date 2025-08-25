@@ -1,4 +1,6 @@
 import { writable } from 'svelte/store';
+import { StreamingJsonParser, type StreamingCodeState } from '../lib/streamingJsonParser';
+
 
 export interface ChatMessage {
   id: string;
@@ -12,10 +14,15 @@ export interface ChatMessage {
   mode?: 'default' | 'reason' | 'code';
 }
 
+export interface StreamingCodeMessage extends ChatMessage {
+  streamingState?: StreamingCodeState;
+  parser?: StreamingJsonParser;
+}
+
 export const isCodingMode = writable(false);
 
 export interface ChatState {
-  messages: ChatMessage[];
+  messages: (ChatMessage | StreamingCodeMessage)[];
   isInitialState: boolean;
   isLoading: boolean;
   isStreaming: boolean;
@@ -51,25 +58,43 @@ function createChatStore() {
       }));
       return messageId;
     },
+
     startAIResponse: (model: string, mode: 'default' | 'reason' | 'code') => {
       const messageId = crypto.randomUUID();
+      const baseMessage = {
+        id: messageId,
+        type: 'ai' as const,
+        content: '',
+        timestamp: new Date(),
+        isStreaming: true,
+        model: model,
+        mode: mode
+      };
+
+      const message = mode === 'code' 
+        ? { 
+            ...baseMessage, 
+            streamingState: {
+              currentField: null,
+              fieldContents: { Files: [] },
+              activeFileIndex: -1,
+              renderingStates: { textVisible: false, filesVisible: [], conclusionVisible: false },
+              isComplete: false
+            } as StreamingCodeState,
+            parser: new StreamingJsonParser()
+          } as StreamingCodeMessage
+        : baseMessage;
+
       update(state => ({
         ...state,
-        messages: [...state.messages, {
-          id: messageId,
-          type: 'ai',
-          content: '',
-          timestamp: new Date(),
-          isStreaming: true,
-          model: model,
-          mode: mode
-        }],
-        isLoading: true, // This should be true when starting
+        messages: [...state.messages, message],
+        isLoading: true,
         isStreaming: true,
         currentStreamingId: messageId
       }));
       return messageId;
     },
+
     updateStreamingMessage: (messageId: string, content: string) => {
       update(state => ({
         ...state,
@@ -80,6 +105,17 @@ function createChatStore() {
         )
       }));
     },
+    updateStreamingCodeMessage: (messageId: string, streamingState: StreamingCodeState) => {
+      update(state => ({
+        ...state,
+        messages: state.messages.map(msg => 
+          msg.id === messageId && msg.mode === 'code'
+            ? { ...msg, streamingState } as StreamingCodeMessage
+            : msg
+        )
+      }));
+    },
+    
     finishStreaming: (messageId: string, tokenCount: number) => {
       update(state => ({
         ...state,
