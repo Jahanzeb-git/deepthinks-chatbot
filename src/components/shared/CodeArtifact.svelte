@@ -14,7 +14,8 @@
   import c from 'highlight.js/lib/languages/c';
   import cpp from 'highlight.js/lib/languages/cpp';
   import go from 'highlight.js/lib/languages/go';
-  import php from 'highlight.js/lib/languages/php';
+  import php from 'highlight.js/lib/languages/php'; 
+
 
   // Dynamically import HLJS theme
   let hljsTheme = '';
@@ -36,6 +37,11 @@
   hljs.registerLanguage('cpp', cpp);
   hljs.registerLanguage('go', go);
   hljs.registerLanguage('php', php);
+  hljs.registerLanguage('jsx', javascript); 
+  hljs.registerLanguage('tsx', typescript);  
+  hljs.registerLanguage('svelte', xml);
+
+
 
   export let filename: string = '';
   export let code: string = '';
@@ -58,9 +64,10 @@
   // Language mapping for file extensions
   const languageMap: { [key: string]: string } = {
     'js': 'javascript',
-    'jsx': 'javascript',
+    'jsx': 'jsx',
     'ts': 'typescript',
-    'tsx': 'typescript',
+    'tsx': 'tsx',
+    'svelte': 'svelte',
     'py': 'python',
     'html': 'html',
     'htm': 'html',
