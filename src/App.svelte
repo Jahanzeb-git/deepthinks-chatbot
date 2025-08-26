@@ -627,11 +627,13 @@
   }
 
   .main-content.artifact-open {
-    width: calc(100% - var(--current-sidebar-width) - 40%);
+    width: calc(100% - var(--current-sidebar-width) - 45%);
   }
 
   .main-content.artifact-open.sidebar-expanded {
-    width: calc(100% - var(--current-sidebar-width) - 35%);
+    width: calc(100% - var(--current-sidebar-width) - 40%);
+
+    
   }
 
   @media (max-width: 768px) {

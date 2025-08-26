@@ -39,3 +39,4 @@ function createArtifactStore() {
 }
 
 export const artifactStore = createArtifactStore();
+export const artifactWidth = writable(0);
