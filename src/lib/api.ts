@@ -151,6 +151,7 @@ export const api = {
           }
         }
       }
+      onEnd();
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         onError(err);

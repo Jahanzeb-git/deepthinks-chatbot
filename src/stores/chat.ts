@@ -1,7 +1,6 @@
 import { writable } from 'svelte/store';
 import { StreamingJsonParser, type StreamingCodeState } from '../lib/streamingJsonParser';
 
-
 export interface ChatMessage {
   id: string;
   type: 'user' | 'ai';
@@ -115,19 +114,45 @@ function createChatStore() {
         )
       }));
     },
-    
-    finishStreaming: (messageId: string, tokenCount: number) => {
-      update(state => ({
-        ...state,
-        messages: state.messages.map(msg => 
-          msg.id === messageId 
-            ? { ...msg, isStreaming: false, tokenCount: tokenCount }
-            : msg
-        ),
-        currentStreamingId: null,
-        isLoading: false,
-        isStreaming: false
-      }));
+
+    finishStreaming: (messageId: string, tokenCount: number = 0) => {
+      update(state => {
+        const newMessages = state.messages.map(msg => {
+          if (msg.id === messageId) {
+            // Create a new object to ensure reactivity
+            const finalMsg: ChatMessage = {
+              ...msg,
+              isStreaming: false,
+              tokenCount: tokenCount
+            };
+
+            // If it's a code message, finalize it
+            if (finalMsg.mode === 'code' && 'streamingState' in finalMsg) {
+              const codeMsg = finalMsg as StreamingCodeMessage;
+              try {
+                // Serialize the final parsed content
+                finalMsg.content = JSON.stringify(codeMsg.streamingState.fieldContents);
+              } catch {
+                // Keep the raw content as a fallback
+              }
+              // Clean up streaming-specific properties to prevent race conditions
+              delete codeMsg.streamingState;
+              delete codeMsg.parser;
+            }
+            
+            return finalMsg;
+          }
+          return msg;
+        });
+
+        return {
+          ...state,
+          messages: newMessages,
+          currentStreamingId: null,
+          isLoading: false,
+          isStreaming: false
+        };
+      });
     },
     interruptStreaming: (messageId: string) => {
       update(state => ({
@@ -213,3 +238,8 @@ function createChatStore() {
 }
 
 export const chatStore = createChatStore();
+
+// Subscribe to isCodingMode to update chat mode
+isCodingMode.subscribe(isCoding => {
+  // This could be used to influence chat behavior, e.g., by setting a default mode
+});

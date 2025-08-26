@@ -14,6 +14,7 @@
   import { artifactStore } from './stores/artifact';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
+  import { derived } from 'svelte/store';
   
   import Sidebar from './components/Sidebar.svelte';
   import ChatContainer from './components/ChatContainer.svelte';
@@ -30,6 +31,8 @@
   import CustomLoading from './components/CustomLoading.svelte';
   import AuthButton from './components/AuthButton.svelte';
   import CodeArtifact from './components/shared/CodeArtifact.svelte';
+  
+
   
   let currentView: 'main' | 'auth' = 'main';
   let isSharedView = false;
@@ -248,25 +251,35 @@
     
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
     const messageId = chatStore.startAIResponse(model, reason);
+
     if (reason === 'code') {
       const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
       if (currentMessage?.parser) {
+        let currentArtifactCode = '';
+
         currentMessage.parser.setCallbacks({
-          onFieldStart: (field) => {
-            console.log(`Started streaming field: ${field}`);
-          },
-          onFieldContent: (field, content, isComplete) => {
-            if (field === 'FileCode' && !isComplete) {
-              // Stream code to artifact in real-time
-              artifactStore.appendCode(content.slice(currentMessage.streamingState?.fieldContents.Files[currentMessage.streamingState.activeFileIndex]?.FileCode?.length || 0));
+          onFieldStart: (field, fileIndex) => {
+            if (field === 'FileCode') {
+              const latestMessage = $chatStore.messages.find(m => m.id === messageId);
+              const fileName = latestMessage?.streamingState?.fieldContents?.Files[fileIndex]?.FileName;
+              if (fileName) {
+                artifactStore.open(fileName, '', true);
+              }
             }
           },
-          onFileStart: (fileIndex) => {
-            console.log(`Started streaming file at index: ${fileIndex}`);
+          onFieldContent: (field, contentChunk) => {
+            if (field === 'FileCode') {
+              currentArtifactCode += contentChunk;
+              artifactStore.updateCode(currentArtifactCode);
+            }
+          },
+          onParsingComplete: () => {
+            artifactStore.finishStreaming();
           }
         });
       }
     }
+
     let accumulatedContent = '';
     let firstTokenReceived = false;
     let streamEnded = false;
@@ -277,15 +290,16 @@
         firstTokenReceived = true;
       }
       accumulatedContent += data.token;
-      chatStore.updateStreamingMessage(messageId, accumulatedContent);
-
-      // Handle streaming code mode
+      
       if (reason === 'code') {
         const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
-          if (currentMessage?.parser) {
-          const streamingState = currentMessage.parser.processChunk(data.token);
+        if (currentMessage?.parser) {
+          currentMessage.parser.processChunk(data.token);
+          const streamingState = currentMessage.parser.getState();
           chatStore.updateStreamingCodeMessage(messageId, streamingState);
         }
+      } else {
+        chatStore.updateStreamingMessage(messageId, accumulatedContent);
       }
     };
 
@@ -293,12 +307,13 @@
       if (streamEnded) return;
       streamEnded = true;
 
-      if (reason === 'code') {
-        artifactStore.close();
-      }
-
       const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
       chatStore.finishStreaming(messageId, tokenCount);
+
+      if (reason === 'code') {
+        artifactStore.finishStreaming();
+      }
+      
       analyticsStore.addTokenUsage(model, message.split(/\s+/).filter(Boolean).length, tokenCount);
 
       if ($authStore.isAuthenticated) {
@@ -335,6 +350,7 @@
         onEnd,
         onError
       );
+      onEnd();
     } catch (error: any) {
       if (error.name === 'AbortError') {
         chatStore.interruptStreaming(messageId);
@@ -390,6 +406,14 @@
   function toggleSidebar() {
     isSidebarExpanded.update(n => !n);
   }
+
+  const artifactLayoutStore = derived(
+    [artifactStore, isSidebarExpanded],
+    ([$artifactStore, $isSidebarExpanded]) => ({
+      artifactOpen: $artifactStore.show,
+      sidebarExpanded: $isSidebarExpanded
+    })
+  );
 </script>
 
 {#if currentView === 'auth'}
@@ -406,6 +430,8 @@
     <div 
       class="main-content"
       class:initial-state={isInitialState}
+      class:artifact-open={$artifactLayoutStore.artifactOpen}
+      class:sidebar-expanded={$artifactLayoutStore.sidebarExpanded}
       on:touchstart={handleTouchStart}
       on:touchmove={handleTouchMove}
       on:touchend={handleTouchEnd}
@@ -440,6 +466,7 @@
       show={$artifactStore.show}
       filename={$artifactStore.filename}
       code={$artifactStore.code}
+      isStreaming={$artifactStore.isStreaming}
       on:close={() => artifactStore.close()}
     />
 
@@ -601,6 +628,21 @@
 
   .mobile-sidebar-backdrop {
     display: none;
+  }
+
+  .main-content.artifact-open {
+    width: calc(100% - var(--current-sidebar-width) - 40%);
+  }
+
+  .main-content.artifact-open.sidebar-expanded {
+    width: calc(100% - var(--current-sidebar-width) - 35%);
+  }
+
+  @media (max-width: 768px) {
+    .main-content.artifact-open {
+      width: 0; /* Hide chat completely on mobile when artifact is open */
+      overflow: hidden;
+    }
   }
 
   @media (max-width: 768px) {

@@ -67,7 +67,7 @@
     <div class="messages-wrapper">
       {#each messages as message (message.id)}
         <ChatMessage 
-          {message} 
+          messageId={message.id} 
           {isSharedView}
           isLastAiMessage={message.id === lastAiMessageId}
           on:regenerate={handleRegenerate} 

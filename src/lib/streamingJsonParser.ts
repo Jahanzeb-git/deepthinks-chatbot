@@ -1,268 +1,180 @@
-// src/lib/streamingJsonParser.ts
 export interface StreamingCodeState {
-  currentField: 'Text' | 'FileName' | 'FileCode' | 'FileText' | 'Conclusion' | null;
   fieldContents: {
     Text?: string;
-    Files: Array<{
+    Files: Array<{ 
       FileName?: string;
       FileCode?: string;
       FileText?: string;
     }>;
     Conclusion?: string;
   };
-  activeFileIndex: number;
-  renderingStates: {
-    textVisible: boolean;
-    filesVisible: boolean[];
-    conclusionVisible: boolean;
-  };
   isComplete: boolean;
 }
 
+export interface ParserCallbacks {
+  onFieldStart?: (field: string, fileIndex: number) => void;
+  onFieldContent?: (field: string, contentChunk: string, fileIndex: number) => void;
+  onFieldEnd?: (field: string, fileIndex: number) => void;
+  onFileStart?: (fileIndex: number) => void;
+  onParsingComplete?: () => void;
+}
+
+enum State {
+  Idle,
+  ExpectKey,
+  ParsingKey,
+  ExpectColon,
+  ExpectValue,
+  ParsingString,
+  ParsingFilesArray,
+  ParsingFileObject,
+}
+
 export class StreamingJsonParser {
+  private state: State = State.Idle;
   private buffer: string = '';
-  private state: StreamingCodeState;
-  private callbacks: {
-    onFieldStart?: (field: string) => void;
-    onFieldContent?: (field: string, content: string, isComplete: boolean) => void;
-    onFileStart?: (fileIndex: number) => void;
-    onParsingComplete?: () => void;
-  } = {};
+  private key: string = '';
+  private fileIndex: number = -1;
+  private keyStack: string[] = [];
 
-  constructor() {
-    this.state = this.getInitialState();
+  private streamingState: StreamingCodeState = {
+    fieldContents: { Files: [] },
+    isComplete: false,
+  };
+  private callbacks: ParserCallbacks = {};
+
+  public setCallbacks(callbacks: ParserCallbacks) {
+    this.callbacks = callbacks;
   }
 
-  private getInitialState(): StreamingCodeState {
-    return {
-      currentField: null,
-      fieldContents: {
-        Files: []
-      },
-      activeFileIndex: -1,
-      renderingStates: {
-        textVisible: false,
-        filesVisible: [],
-        conclusionVisible: false
-      },
-      isComplete: false
-    };
-  }
-
-  public setCallbacks(callbacks: typeof this.callbacks) {
-    this.callbacks = { ...this.callbacks, ...callbacks };
-  }
-
-  public processChunk(chunk: string): StreamingCodeState {
+  public processChunk(chunk: string) {
     this.buffer += chunk;
-    this.parseBuffer();
-    return { ...this.state };
-  }
-
-  private parseBuffer(): void {
-    // Look for field starts
-    this.detectTextField();
-    this.detectFilesArray();
-    this.detectConclusionField();
-    
-    // Process current field content
-    if (this.state.currentField) {
-      this.extractFieldContent();
-    }
-  }
-
-  private detectTextField(): void {
-    if (this.state.currentField === null && this.buffer.includes('"Text":')) {
-      const textStart = this.buffer.indexOf('"Text":');
-      if (textStart !== -1) {
-        this.state.currentField = 'Text';
-        this.state.renderingStates.textVisible = true;
-        this.callbacks.onFieldStart?.('Text');
-      }
-    }
-  }
-
-  private detectFilesArray(): void {
-    if (this.buffer.includes('"Files":')) {
-      const filesStart = this.buffer.indexOf('"Files":');
-      if (filesStart !== -1) {
-        this.detectFileFields();
-      }
-    }
-  }
-
-  private detectFileFields(): void {
-    // Look for FileName in current or new file
-    const fileNameMatches = [...this.buffer.matchAll(/"FileName"\s*:\s*"([^"]*)"/g)];
-    
-    fileNameMatches.forEach((match, index) => {
-      if (index >= this.state.fieldContents.Files.length) {
-        // New file detected
-        this.state.fieldContents.Files.push({});
-        this.state.renderingStates.filesVisible.push(false);
-        this.state.activeFileIndex = index;
-        this.callbacks.onFileStart?.(index);
-      }
-      
-      if (!this.state.renderingStates.filesVisible[index]) {
-        this.state.renderingStates.filesVisible[index] = true;
-        this.state.fieldContents.Files[index].FileName = match[1];
-        this.callbacks.onFieldContent?.('FileName', match[1], true);
-      }
-    });
-
-    // Detect FileCode and FileText for current file
-    if (this.state.activeFileIndex >= 0) {
-      this.detectFileCodeField();
-      this.detectFileTextField();
-    }
-  }
-
-  private detectFileCodeField(): void {
-    const fileCodePattern = /"FileCode"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(fileCodePattern);
-    
-    if (match && this.state.currentField !== 'FileCode') {
-      this.state.currentField = 'FileCode';
-      this.callbacks.onFieldStart?.('FileCode');
-    }
-  }
-
-  private detectFileTextField(): void {
-    const fileTextPattern = /"FileText"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(fileTextPattern);
-    
-    if (match && this.state.currentField !== 'FileText') {
-      this.state.currentField = 'FileText';
-      this.callbacks.onFieldStart?.('FileText');
-    }
-  }
-
-  private detectConclusionField(): void {
-    if (this.buffer.includes('"Conclusion":')) {
-      const conclusionStart = this.buffer.indexOf('"Conclusion":');
-      if (conclusionStart !== -1 && this.state.currentField !== 'Conclusion') {
-        this.state.currentField = 'Conclusion';
-        this.state.renderingStates.conclusionVisible = true;
-        this.callbacks.onFieldStart?.('Conclusion');
-      }
-    }
-  }
-
-  private extractFieldContent(): void {
-    switch (this.state.currentField) {
-      case 'Text':
-        this.extractTextContent();
-        break;
-      case 'FileCode':
-        this.extractFileCodeContent();
-        break;
-      case 'FileText':
-        this.extractFileTextContent();
-        break;
-      case 'Conclusion':
-        this.extractConclusionContent();
-        break;
-    }
-  }
-
-  private extractTextContent(): void {
-    const pattern = /"Text"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(pattern);
-    
-    if (match) {
-      const content = this.unescapeString(match[1]);
-      this.state.fieldContents.Text = content;
-      const isComplete = this.buffer.includes('"Text":"' + match[1] + '"');
-      this.callbacks.onFieldContent?.('Text', content, isComplete);
-      
-      if (isComplete) {
-        this.state.currentField = null;
-      }
-    }
-  }
-
-  private extractFileCodeContent(): void {
-    const pattern = /"FileCode"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(pattern);
-    
-    if (match && this.state.activeFileIndex >= 0) {
-      const content = this.unescapeString(match[1]);
-      this.state.fieldContents.Files[this.state.activeFileIndex].FileCode = content;
-      const isComplete = this.isFieldComplete('FileCode', match[1]);
-      this.callbacks.onFieldContent?.('FileCode', content, isComplete);
-      
-      if (isComplete) {
-        this.state.currentField = null;
-      }
-    }
-  }
-
-  private extractFileTextContent(): void {
-    const pattern = /"FileText"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(pattern);
-    
-    if (match && this.state.activeFileIndex >= 0) {
-      const content = this.unescapeString(match[1]);
-      this.state.fieldContents.Files[this.state.activeFileIndex].FileText = content;
-      const isComplete = this.isFieldComplete('FileText', match[1]);
-      this.callbacks.onFieldContent?.('FileText', content, isComplete);
-      
-      if (isComplete) {
-        this.state.currentField = null;
-      }
-    }
-  }
-
-  private extractConclusionContent(): void {
-    const pattern = /"Conclusion"\s*:\s*"([^"]*(?:\\.[^"]*)*)"?/;
-    const match = this.buffer.match(pattern);
-    
-    if (match) {
-      const content = this.unescapeString(match[1]);
-      this.state.fieldContents.Conclusion = content;
-      const isComplete = this.isFieldComplete('Conclusion', match[1]);
-      this.callbacks.onFieldContent?.('Conclusion', content, isComplete);
-      
-      if (isComplete) {
-        this.state.currentField = null;
-        this.checkIfParsingComplete();
-      }
-    }
-  }
-
-  private isFieldComplete(fieldName: string, rawContent: string): boolean {
-    // Check if the field has a closing quote and proper JSON structure
-    const fieldPattern = new RegExp(`"${fieldName}"\\s*:\\s*"${this.escapeRegex(rawContent)}"`);
-    return fieldPattern.test(this.buffer);
-  }
-
-  private checkIfParsingComplete(): void {
-    // Simple heuristic: check if buffer ends with }
-    if (this.buffer.trim().endsWith('}')) {
-      this.state.isComplete = true;
-      this.callbacks.onParsingComplete?.();
-    }
-  }
-
-  private unescapeString(str: string): string {
-    return str.replace(/\\"/g, '"')
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '\r')
-              .replace(/\\t/g, '\t')
-              .replace(/\\\\/g, '\\');
-  }
-
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  public reset(): void {
-    this.buffer = '';
-    this.state = this.getInitialState();
+    this.parse();
   }
 
   public getState(): StreamingCodeState {
-    return { ...this.state };
+    return this.streamingState;
+  }
+
+  public reset() {
+    this.state = State.Idle;
+    this.buffer = '';
+    this.key = '';
+    this.fileIndex = -1;
+    this.keyStack = [];
+    this.streamingState = {
+      fieldContents: { Files: [] },
+      isComplete: false,
+    };
+  }
+
+  private parse() {
+    while (this.buffer.length > 0) {
+      const char = this.buffer[0];
+      this.buffer = this.buffer.slice(1);
+
+      switch (this.state) {
+        case State.Idle:
+          if (char === '{') this.state = State.ExpectKey;
+          break;
+
+        case State.ExpectKey:
+          if (char === '"') {
+            this.key = '';
+            this.state = State.ParsingKey;
+          } else if (char === '}') {
+            this.state = State.Idle;
+            this.streamingState.isComplete = true;
+            this.callbacks.onParsingComplete?.();
+          }
+          break;
+
+        case State.ParsingKey:
+          if (char === '"') {
+            this.state = State.ExpectColon;
+          } else {
+            this.key += char;
+          }
+          break;
+
+        case State.ExpectColon:
+          if (char === ':') this.state = State.ExpectValue;
+          break;
+
+        case State.ExpectValue:
+          if (char === '"') {
+            this.state = State.ParsingString;
+            this.callbacks.onFieldStart?.(this.key, this.fileIndex);
+          } else if (char === '[') {
+            if (this.key === 'Files') {
+              this.state = State.ParsingFilesArray;
+              this.keyStack.push(this.key);
+            }
+          }
+          break;
+
+        case State.ParsingString:
+          if (char === '\\') {
+            if (this.buffer.length > 0) {
+              const nextChar = this.buffer[0];
+              this.buffer = this.buffer.slice(1);
+              let unescaped = nextChar;
+              switch (nextChar) {
+                case 'n': unescaped = '\n'; break;
+                case 't': unescaped = '\t'; break;
+                case 'r': unescaped = '\r'; break;
+                case 'b': unescaped = '\b'; break;
+                case 'f': unescaped = '\f'; break;
+                case '"': unescaped = '"'; break;
+                case '\\': unescaped = '\\'; break;
+                case '/': unescaped = '/'; break;
+              }
+              this.appendContent(unescaped);
+            }
+          } else if (char === '"') {
+            this.callbacks.onFieldEnd?.(this.key, this.fileIndex);
+            this.state = this.keyStack.includes('Files') ? State.ParsingFileObject : State.ExpectKey;
+          } else {
+            this.appendContent(char);
+          }
+          break;
+
+        case State.ParsingFilesArray:
+          if (char === '{') {
+            this.fileIndex++;
+            this.streamingState.fieldContents.Files.push({});
+            this.callbacks.onFileStart?.(this.fileIndex);
+            this.state = State.ParsingFileObject;
+          } else if (char === ']') {
+            this.keyStack.pop();
+            this.state = State.ExpectKey;
+          }
+          break;
+
+        case State.ParsingFileObject:
+           if (char === '"') {
+            this.key = '';
+            this.state = State.ParsingKey;
+          } else if (char === '}') {
+            this.state = State.ParsingFilesArray;
+          }
+          break;
+      }
+    }
+  }
+
+  private appendContent(chunk: string) {
+    this.callbacks.onFieldContent?.(this.key, chunk, this.fileIndex);
+    if (this.keyStack.includes('Files')) {
+      if (!this.streamingState.fieldContents.Files[this.fileIndex][this.key]) {
+        this.streamingState.fieldContents.Files[this.fileIndex][this.key] = '';
+      }
+      this.streamingState.fieldContents.Files[this.fileIndex][this.key] += chunk;
+    } else {
+      if (!this.streamingState.fieldContents[this.key]) {
+        this.streamingState.fieldContents[this.key] = '';
+      }
+      this.streamingState.fieldContents[this.key] += chunk;
+    }
   }
 }
