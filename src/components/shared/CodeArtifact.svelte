@@ -33,8 +33,8 @@
     if (lang && hljs.getLanguage(lang)) {
       return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
     }
-    // Fallback for plaintext or unknown languages
-    return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // Fallback for plaintext or unknown languages, ensuring newlines are preserved
+    return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
   })();
 
   // Calculate artifact width based on sidebar state

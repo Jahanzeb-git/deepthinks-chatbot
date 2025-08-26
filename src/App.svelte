@@ -15,7 +15,8 @@
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   import { derived } from 'svelte/store';
-  
+  import { StreamProcessor } from './lib/stream-processor';
+
   import Sidebar from './components/Sidebar.svelte';
   import ChatContainer from './components/ChatContainer.svelte';
   import ChatInput from './components/ChatInput.svelte';
@@ -31,9 +32,7 @@
   import CustomLoading from './components/CustomLoading.svelte';
   import AuthButton from './components/AuthButton.svelte';
   import CodeArtifact from './components/shared/CodeArtifact.svelte';
-  
 
-  
   let currentView: 'main' | 'auth' = 'main';
   let isSharedView = false;
   let showPasswordModal = false;
@@ -252,52 +251,50 @@
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
     const messageId = chatStore.startAIResponse(model, reason);
 
-    if (reason === 'code') {
-      const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
-      if (currentMessage?.parser) {
-        let currentArtifactCode = '';
-
-        currentMessage.parser.setCallbacks({
-          onFieldStart: (field, fileIndex) => {
-            if (field === 'FileCode') {
-              const latestMessage = $chatStore.messages.find(m => m.id === messageId);
-              const fileName = latestMessage?.streamingState?.fieldContents?.Files[fileIndex]?.FileName;
-              if (fileName) {
-                artifactStore.open(fileName, '', true);
-              }
-            }
-          },
-          onFieldContent: (field, contentChunk) => {
-            if (field === 'FileCode') {
-              currentArtifactCode += contentChunk;
-              artifactStore.updateCode(currentArtifactCode);
-            }
-          },
-          onParsingComplete: () => {
-            artifactStore.finishStreaming();
-          }
-        });
-      }
-    }
-
     let accumulatedContent = '';
     let firstTokenReceived = false;
     let streamEnded = false;
+    let streamProcessor: StreamProcessor | null = null;
+
+    if (reason === 'code') {
+      streamProcessor = new StreamProcessor();
+      let artifactIsOpen = false;
+
+      streamProcessor.setCallbacks({
+        onFileStart: (fileIndex) => {
+          chatStore.addFileToCodeMessage(messageId, fileIndex);
+        },
+        onTextChunk: (chunk) => chatStore.appendCodeModeText(messageId, chunk),
+        onFileNameChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileName(messageId, fileIndex, chunk),
+        onFileCodeChunk: (chunk, fileIndex) => {
+          if (!artifactIsOpen) {
+            const message = $chatStore.messages.find(m => m.id === messageId);
+            const fileName = message?.codeModeContent?.Files[fileIndex]?.FileName;
+            artifactStore.open(fileName || 'code', '', true);
+            artifactIsOpen = true;
+          }
+          artifactStore.appendCode(chunk);
+          chatStore.appendCodeModeFileCode(messageId, fileIndex, chunk);
+        },
+        onFileTextChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileText(messageId, fileIndex, chunk),
+        onConclusionChunk: (chunk) => chatStore.appendCodeModeConclusion(messageId, chunk),
+        onComplete: () => {
+          artifactStore.finishStreaming();
+        }
+      });
+    }
 
     const onData = (data: { token: string, trace: boolean }) => {
+      if (streamEnded) return;
+
       if (!firstTokenReceived) {
         chatStore.setLoading(false);
         firstTokenReceived = true;
       }
       accumulatedContent += data.token;
-      
-      if (reason === 'code') {
-        const currentMessage = $chatStore.messages.find(m => m.id === messageId) as StreamingCodeMessage;
-        if (currentMessage?.parser) {
-          currentMessage.parser.processChunk(data.token);
-          const streamingState = currentMessage.parser.getState();
-          chatStore.updateStreamingCodeMessage(messageId, streamingState);
-        }
+
+      if (streamProcessor) {
+        streamProcessor.process(data.token);
       } else {
         chatStore.updateStreamingMessage(messageId, accumulatedContent);
       }
@@ -307,12 +304,11 @@
       if (streamEnded) return;
       streamEnded = true;
 
-      const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
-      chatStore.finishStreaming(messageId, tokenCount);
+      streamProcessor?.close();
 
-      if (reason === 'code') {
-        artifactStore.finishStreaming();
-      }
+      const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
+      chatStore.updateStreamingMessage(messageId, accumulatedContent);
+      chatStore.finishStreaming(messageId, tokenCount);
       
       analyticsStore.addTokenUsage(model, message.split(/\s+/).filter(Boolean).length, tokenCount);
 

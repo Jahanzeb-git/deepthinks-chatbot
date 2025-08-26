@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher, tick } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
   import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle } from 'lucide-svelte';
-  import type { ChatMessage, StreamingCodeMessage } from '../stores/chat';
+  import type { ChatMessage } from '../stores/chat';
   import { chatStore } from '../stores/chat';
-  import { StreamingJsonParser, type StreamingCodeState } from '../lib/streamingJsonParser';
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
   import FileCard from './shared/FileCard.svelte';
@@ -14,7 +13,7 @@
   export let isLastAiMessage: boolean = false;
   export let isSharedView: boolean = false;
 
-  $: message = $chatStore.messages.find(m => m.id === messageId) as ChatMessage | StreamingCodeMessage;
+  $: message = $chatStore.messages.find(m => m.id === messageId);
 
   let messageElement: HTMLDivElement;
   let mounted = false;
@@ -41,51 +40,35 @@
   
   $: if (message) {
     if (message.type === 'ai') {
-      if (message.mode === 'code') {
-        // Handle streaming code mode
-        if ('streamingState' in message && message.streamingState) {
-          // Use streaming state directly for progressive rendering
-          const streamingState = message.streamingState;
-          codeBlocks = buildCodeBlocksFromStreamingState(streamingState);
-        } else {
-          // Fallback to traditional parsing for complete messages
-          try {
-            const parsed = JSON.parse(message.content);
-            const newBlocks: CodeBlock[] = [];
-            let idCounter = 0;
+      if (message.mode === 'code' && message.codeModeContent) {
+        const newBlocks: CodeBlock[] = [];
+        let idCounter = 0;
+        const content = message.codeModeContent;
 
-            if (parsed.Text) {
-              newBlocks.push({ id: idCounter++, type: 'text', content: parsed.Text });
-            }
-
-            if (parsed.Files && Array.isArray(parsed.Files)) {
-              for (const file of parsed.Files) {
-                if (file.FileName) {
-                  newBlocks.push({ 
-                    id: idCounter++, 
-                    type: 'file', 
-                    content: file.FileText || '', 
-                    file: {
-                      fileName: file.FileName,
-                      fileCode: file.FileCode || '',
-                      fileText: file.FileText || ''
-                    } 
-                  });
+        if (content.Text) {
+          newBlocks.push({ id: idCounter++, type: 'text', content: content.Text });
+        }
+        if (content.Files && Array.isArray(content.Files)) {
+          for (const file of content.Files) {
+            if (file.FileName || file.FileCode || file.FileText) {
+              newBlocks.push({
+                id: idCounter++,
+                type: 'file',
+                content: file.FileText || '',
+                file: {
+                  fileName: file.FileName || '',
+                  fileCode: file.FileCode || '',
+                  fileText: file.FileText || ''
                 }
-              }
+              });
             }
-
-            if (parsed.Conclusion) {
-              newBlocks.push({ id: idCounter++, type: 'conclusion', content: parsed.Conclusion });
-            }
-            codeBlocks = newBlocks;
-          } catch (e) {
-            // It's an incomplete JSON string, so we don't do anything yet.
-            // The final complete JSON will parse correctly and render the full content.
           }
         }
-      } else {
-        // Handle default and reason modes with existing logic
+        if (content.Conclusion) {
+          newBlocks.push({ id: idCounter++, type: 'conclusion', content: content.Conclusion });
+        }
+        codeBlocks = newBlocks;
+      } else if (message.mode !== 'code') {
         const parts = message.content.split(/(<think>|<\/think>)/g);
         const newSegments: Segment[] = [];
         let inThinkingBlock = false;
@@ -99,44 +82,6 @@
     }
   }
 
-  function buildCodeBlocksFromStreamingState(state: StreamingCodeState): CodeBlock[] {
-    const blocks: CodeBlock[] = [];
-    let idCounter = 0;
-
-    if (state.fieldContents.Text) {
-      blocks.push({
-        id: idCounter++,
-        type: 'text',
-        content: state.fieldContents.Text
-      });
-    }
-
-    state.fieldContents.Files.forEach((file) => {
-      if (file.FileName) {
-        blocks.push({
-          id: idCounter++,
-          type: 'file',
-          content: file.FileText || '',
-          file: {
-            fileName: file.FileName,
-            fileCode: file.FileCode || '',
-            fileText: file.FileText || ''
-          }
-        });
-      }
-    });
-
-    if (state.fieldContents.Conclusion) {
-      blocks.push({
-        id: idCounter++,
-        type: 'conclusion',
-        content: state.fieldContents.Conclusion
-      });
-    }
-
-    return blocks;
-  }
-
   function openArtifact(file: any) {
     if (file) {
       artifactStore.open(file.fileName, file.fileCode, false);
@@ -148,7 +93,10 @@
     : message?.content.split(/\s+/).filter(Boolean).length;
 
   function handleCopy() {
-    navigator.clipboard.writeText(message.content);
+    const contentToCopy = message.mode === 'code' && message.codeModeContent 
+      ? JSON.stringify(message.codeModeContent, null, 2) 
+      : message.content;
+    navigator.clipboard.writeText(contentToCopy);
     copied = true;
     setTimeout(() => (copied = false), 2000);
   }
@@ -188,9 +136,11 @@
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
             {:else if block.type === 'file' && block.file}
               <div class="file-block">
-                <button class="file-card-button" on:click={() => openArtifact(block.file)}>
-                  <FileCard filename={block.file.fileName} />
-                </button>
+                {#if block.file.fileName}
+                  <button class="file-card-button" on:click={() => openArtifact(block.file)}>
+                    <FileCard filename={block.file.fileName} />
+                  </button>
+                {/if}
                 {#if block.file.fileText}
                   <div class="markdown-content file-text">{@html renderMarkdown(block.file.fileText)}</div>
                 {/if}
