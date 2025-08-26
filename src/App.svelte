@@ -258,7 +258,7 @@
 
     if (reason === 'code') {
       streamProcessor = new StreamProcessor();
-      let artifactIsOpen = false;
+      let currentArtifactFileIndex = -1; // Track which file is currently in artifact
 
       streamProcessor.setCallbacks({
         onFileStart: (fileIndex) => {
@@ -267,11 +267,12 @@
         onTextChunk: (chunk) => chatStore.appendCodeModeText(messageId, chunk),
         onFileNameChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileName(messageId, fileIndex, chunk),
         onFileCodeChunk: (chunk, fileIndex) => {
-          if (!artifactIsOpen) {
+          // Check if we need to open artifact for a new file
+          if (currentArtifactFileIndex !== fileIndex) {
             const message = $chatStore.messages.find(m => m.id === messageId);
-            const fileName = message?.codeModeContent?.Files[fileIndex]?.FileName;
-            artifactStore.open(fileName || 'code', '', true);
-            artifactIsOpen = true;
+            const fileName = message?.codeModeContent?.Files[fileIndex]?.FileName || `file-${fileIndex}`;
+            artifactStore.open(fileName, '', true);
+            currentArtifactFileIndex = fileIndex;
           }
           artifactStore.appendCode(chunk);
           chatStore.appendCodeModeFileCode(messageId, fileIndex, chunk);

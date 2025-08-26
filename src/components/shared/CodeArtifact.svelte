@@ -48,7 +48,9 @@
   let isResizing = false;
   let isCopied = false;
   let contentElement: HTMLPreElement;
-  let hasScrolledToBottom = false;
+  let shouldAutoScroll = true;
+  let userHasScrolled = false;
+  let scrollTimeout: NodeJS.Timeout;
 
   const MIN_WIDTH_VW = 20;
   const MAX_WIDTH_VW = 80;
@@ -84,6 +86,9 @@
   function close() {
     dispatch('close');
     artifactWidth.set(0);
+    // Reset scroll state when closing
+    shouldAutoScroll = true;
+    userHasScrolled = false;
   }
 
   function handleMousedown() {
@@ -103,6 +108,25 @@
 
     if (newWidthVw >= MIN_WIDTH_VW && newWidthVw <= MAX_WIDTH_VW) {
       artifactWidth.set(newWidth);
+    }
+  }
+
+  // Handle user scrolling
+  function handleScroll() {
+    if (!contentElement || !isStreaming) return;
+
+    const isAtBottom = contentElement.scrollTop + contentElement.clientHeight >= contentElement.scrollHeight - 10;
+    
+    // If user scrolled up from bottom, disable auto-scroll
+    if (!isAtBottom && shouldAutoScroll) {
+      shouldAutoScroll = false;
+      userHasScrolled = true;
+    }
+    
+    // If user scrolled back to bottom, re-enable auto-scroll
+    if (isAtBottom && userHasScrolled) {
+      shouldAutoScroll = true;
+      userHasScrolled = false;
     }
   }
 
@@ -130,14 +154,9 @@
     URL.revokeObjectURL(url);
   }
 
-  function checkAndScrollToBottom() {
-    if (!contentElement || hasScrolledToBottom) return;
-    
-    const hasVerticalScrollbar = contentElement.scrollHeight > contentElement.clientHeight;
-    
-    if (hasVerticalScrollbar) {
+  function scrollToBottom() {
+    if (contentElement && shouldAutoScroll && isStreaming) {
       contentElement.scrollTop = contentElement.scrollHeight;
-      hasScrolledToBottom = true;
     }
   }
 
@@ -158,16 +177,25 @@
       artifactWidth.set((window.innerWidth * initialWidthVw) / 100);
     } else if (!show) {
       artifactWidth.set(0);
-      hasScrolledToBottom = false; // Reset when artifact is closed
+      // Reset scroll state when artifact is closed
+      shouldAutoScroll = true;
+      userHasScrolled = false;
     }
   }
 
-  // Watch for code changes and check if scrollbar appears
-  $: if (code && contentElement) {
-    // Use setTimeout to ensure DOM has updated with new content
-    setTimeout(() => {
-      checkAndScrollToBottom();
+  // Watch for code changes and auto-scroll if needed
+  $: if (code && isStreaming) {
+    // Debounce scrolling to avoid excessive calls
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      scrollToBottom();
     }, 10);
+  }
+
+  // Reset auto-scroll when streaming starts
+  $: if (isStreaming) {
+    shouldAutoScroll = true;
+    userHasScrolled = false;
   }
 
   onMount(() => {
@@ -177,22 +205,16 @@
     return () => {
       window.removeEventListener('mouseup', handleMouseup);
       window.removeEventListener('mousemove', handleMousemove);
+      clearTimeout(scrollTimeout);
     };
   });
 
   afterUpdate(() => {
-    if (isStreaming && code) {
-      setTimeout(() => {
-        if (!contentElement) {
-          contentElement = container.querySelector('.artifact-content pre');
-        }
-        if (contentElement) {
-          contentElement.scrollTop = contentElement.scrollHeight;
-        }
-      }, 50);
-    } else if (!contentElement) {
-      // Get reference to content element when not streaming
+    if (!contentElement) {
       contentElement = container?.querySelector('.artifact-content pre');
+      if (contentElement) {
+        contentElement.addEventListener('scroll', handleScroll);
+      }
     }
   });
 </script>
@@ -393,11 +415,13 @@
     overflow-y: auto;
     padding: 0;
     font-family: monospace;
+    scroll-behavior: smooth;
   }
 
   .artifact-content pre {
     margin: 0;
     height: 100%;
+    overflow-y: auto;
   }
 
   .artifact-container[data-theme="light"] .artifact-content pre {
