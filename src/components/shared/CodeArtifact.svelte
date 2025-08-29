@@ -47,7 +47,8 @@
   export let code: string = '';
   export let show: boolean = false;
   export let isStreaming: boolean = false;
-
+  export let version: number | undefined = undefined;
+  
   const dispatch = createEventDispatcher();
 
   let container: HTMLDivElement;
@@ -242,7 +243,12 @@
       <div class="resize-indicator" />
     </div>
     <div class="artifact-header">
-      <span class="filename">{filename}</span>
+      <div class="filename-container">
+        <span class="filename">{filename}</span>
+        {#if version !== undefined}
+          <span class="version-badge">v{version}</span>
+        {/if}
+      </div>
       <div class="header-controls">
         {#if isStreaming}
           <span class="streaming-indicator">●</span>
@@ -284,25 +290,15 @@
     top: 0;
     right: 0;
     height: 100vh;
+    background: var(--background-color);
+    color: var(--text-color);
+    border-left: 1px solid var(--border-color);
     box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
     z-index: 500;
     display: flex;
     flex-direction: column;
     transform: translateX(100%);
     animation: slide-in 0.3s ease-out forwards;
-  }
-
-  /* Theme-specific styles */
-  .artifact-container[data-theme="dark"] {
-    background: #0d1117;
-    color: #c9d1d9;
-    border-left: 1px solid #30363d;
-  }
-
-  .artifact-container[data-theme="light"] {
-    background: #f7f7f7; /* Light gray background */
-    color: #333;
-    border-left: 1px solid #ddd;
   }
 
   @keyframes slide-in {
@@ -340,22 +336,15 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem 1rem;
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
     font-family: monospace;
-  }
-
-  .artifact-container[data-theme="dark"] .artifact-header {
-    background: #161b22;
-    border-bottom: 1px solid #30363d;
-  }
-
-  .artifact-container[data-theme="light"] .artifact-header {
-    background: #f7f7f7; /* Light gray for header */
-    border-bottom: 1px solid #ddd;
   }
 
   .filename {
     font-weight: 500;
     font-size: 0.9rem;
+    color: var(--text-color);
   }
 
   .header-controls {
@@ -385,14 +374,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .artifact-container[data-theme="dark"] .action-button {
     color: var(--text-muted);
-  }
-
-  .artifact-container[data-theme="light"] .action-button {
-    color: #555;
   }
 
   .action-button:hover:not(:disabled) {
@@ -409,31 +391,17 @@
     color: #10b981;
   }
 
-  .artifact-container[data-theme="dark"] .copy-button.copied {
-    color: #10b981;
-  }
-
-  .artifact-container[data-theme="light"] .copy-button.copied {
-    color: #059669;
-  }
-
   .artifact-content {
     flex-grow: 1;
-    overflow-y: auto;
-    padding: 0;
+    overflow: hidden;
     font-family: monospace;
-    scroll-behavior: smooth;
   }
 
   .artifact-content pre {
     margin: 0;
     height: 100%;
     overflow-y: auto;
-  }
-
-  .artifact-container[data-theme="light"] .artifact-content pre {
-    background-color: #f7f7f7 !important; /* Ensure pre also has the light gray background */
-    opacity: 1 !important; /* Force opacity for pre */
+    scroll-behavior: smooth;
   }
 
   .artifact-content code.hljs {
@@ -445,23 +413,10 @@
     display: block;
   }
 
-  .artifact-container[data-theme="light"] .artifact-content code.hljs {
-    color: #24292e;
-    background-color: #f7f7f7 !important; /* Light gray for code background */
-    opacity: 1 !important;
-  }
-
   .cursor {
     animation: blink 1s infinite;
     font-weight: bold;
-  }
-
-  .artifact-container[data-theme="dark"] .cursor {
     color: #f85149;
-  }
-
-  .artifact-container[data-theme="light"] .cursor {
-    color: #d73a49;
   }
 
   @keyframes blink {
@@ -473,5 +428,37 @@
     .artifact-container {
       width: 100% !important;
     }
+  }
+
+  .filename-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  } 
+
+  .version-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #14b8a6;
+    background: rgba(20, 184, 166, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+
+  /* Dark theme version badge */
+  .artifact-container[data-theme="dark"] .version-badge {
+    color: #5eead4;
+    background: rgba(94, 234, 212, 0.1);
+  }
+
+  /* Dark theme cursor */
+  .artifact-container[data-theme="dark"] .cursor {
+    color: #f85149;
+  }
+
+  /* Light theme cursor */
+  .artifact-container[data-theme="light"] .cursor {
+    color: #d73a49;
   }
 </style>

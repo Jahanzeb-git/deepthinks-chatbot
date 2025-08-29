@@ -266,12 +266,14 @@
         },
         onTextChunk: (chunk) => chatStore.appendCodeModeText(messageId, chunk),
         onFileNameChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileName(messageId, fileIndex, chunk),
+        onFileVersionChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileVersion(messageId, fileIndex, chunk),
         onFileCodeChunk: (chunk, fileIndex) => {
           // Check if we need to open artifact for a new file
           if (currentArtifactFileIndex !== fileIndex) {
             const message = $chatStore.messages.find(m => m.id === messageId);
             const fileName = message?.codeModeContent?.Files[fileIndex]?.FileName || `file-${fileIndex}`;
-            artifactStore.open(fileName, '', true);
+            const fileVersion = message?.codeModeContent?.Files[fileIndex]?.FileVersion;
+            artifactStore.open(fileName, '', true, fileVersion);
             currentArtifactFileIndex = fileIndex;
           }
           artifactStore.appendCode(chunk);
@@ -464,6 +466,7 @@
       filename={$artifactStore.filename}
       code={$artifactStore.code}
       isStreaming={$artifactStore.isStreaming}
+      version={$artifactStore.version}
       on:close={() => artifactStore.close()}
     />
 

@@ -4,6 +4,7 @@ export interface CodeModeContent {
   Text?: string;
   Files: Array<{ 
     FileName?: string;
+    FileVersion?: number;
     FileCode?: string;
     FileText?: string;
   }>;
@@ -118,6 +119,14 @@ function createChatStore() {
     appendCodeModeFileName: (messageId: string, fileIndex: number, chunk: string) => {
       updateCodeContent(messageId, content => {
         content.Files[fileIndex].FileName = (content.Files[fileIndex].FileName || '') + chunk;
+      });
+    },
+    appendCodeModeFileVersion: (messageId: string, fileIndex: number, chunk: string) => {
+      updateCodeContent(messageId, content => {
+        const version = parseInt(chunk);
+        if (!isNaN(version)) {
+          content.Files[fileIndex].FileVersion = version;
+        }
       });
     },
     appendCodeModeFileCode: (messageId: string, fileIndex: number, chunk: string) => {

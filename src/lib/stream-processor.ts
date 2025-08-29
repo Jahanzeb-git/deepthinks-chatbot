@@ -1,6 +1,7 @@
 export interface StreamProcessorCallbacks {
   onTextChunk?: (chunk: string) => void;
   onFileNameChunk?: (chunk: string, fileIndex: number) => void;
+  onFileVersionChunk?: (chunk: string, fileIndex: number) => void;
   onFileCodeChunk?: (chunk: string, fileIndex: number) => void;
   onFileTextChunk?: (chunk: string, fileIndex: number) => void;
   onConclusionChunk?: (chunk: string) => void;
@@ -36,7 +37,7 @@ export class StreamProcessor {
   private parse() {
     while (this.buffer.length > 0) {
       if (this.state === State.Idle) {
-        const keyMatch = this.buffer.match(/.{1}"(Text|FileName|FileCode|FileText|Conclusion)"\s*:\s*"/);
+        const keyMatch = this.buffer.match(/.{1}"(Text|FileName|FileVersion|FileCode|FileText|Conclusion)"\s*:\s*"/);
         if (!keyMatch) return; // Not enough data to find a key, wait for more. 
 
         this.currentKey = keyMatch[1];
@@ -112,6 +113,9 @@ export class StreamProcessor {
         break;
       case 'Conclusion':
         this.callbacks.onConclusionChunk?.(unescapedChunk);
+        break;
+      case 'FileVersion':
+        this.callbacks.onFileVersionChunk?.(unescapedChunk, this.fileIndex);
         break;
     }
   }

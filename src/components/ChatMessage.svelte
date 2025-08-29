@@ -14,6 +14,7 @@
   export let isSharedView: boolean = false;
 
   $: message = $chatStore.messages.find(m => m.id === messageId);
+  $: activeFileKey = $artifactStore.activeFileKey;
 
   let messageElement: HTMLDivElement;
   let mounted = false;
@@ -30,6 +31,7 @@
     content: string; 
     file?: { 
       fileName: string;
+      fileVersion?: number;
       fileCode: string;
       fileText: string;
     };
@@ -57,6 +59,7 @@
                 content: file.FileText || '',
                 file: {
                   fileName: file.FileName || '',
+                  fileVersion: file.FileVersion, 
                   fileCode: file.FileCode || '',
                   fileText: file.FileText || ''
                 }
@@ -84,7 +87,7 @@
 
   function openArtifact(file: any) {
     if (file) {
-      artifactStore.open(file.fileName, file.fileCode, false);
+      artifactStore.open(file.fileName, file.fileCode, false, file.fileVersion);
     }
   }
 
@@ -136,9 +139,13 @@
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
             {:else if block.type === 'file' && block.file}
               <div class="file-block">
-                {#if block.file.fileName}
+                {#if block.file && block.file.fileName}
                   <button class="file-card-button" on:click={() => openArtifact(block.file)}>
-                    <FileCard filename={block.file.fileName} />
+                    <FileCard 
+                      filename={block.file.fileName}
+                      version={block.file.fileVersion}
+                      isActive={activeFileKey === `${block.file.fileName}_v${block.file.fileVersion || 'undefined'}`}
+                    />
                   </button>
                 {/if}
                 {#if block.file.fileText}

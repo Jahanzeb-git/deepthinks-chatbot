@@ -33,7 +33,7 @@
 <div class="suggestions-container">
   <div class="suggestions-grid">
     {#each suggestions as suggestion}
-      <button class="suggestion-pill" on:click={() => handleSelect(suggestion.prompt)}>
+      <button class="suggestion-card" on:click={() => handleSelect(suggestion.prompt)}>
         {suggestion.title}
       </button>
     {/each}
@@ -62,27 +62,73 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0.75rem;
+    gap: 0.875rem;
   }
 
-  .suggestion-pill {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 9999px; /* Pill shape */
-    padding: 0.5rem 1rem;
+  .suggestion-card {
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-color);
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: nowrap;
+    backdrop-filter: blur(8px);
+    position: relative;
+    overflow: hidden;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* Default light theme */
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.08);
   }
 
-  .suggestion-pill:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    border-color: var(--primary-color);
-    background: var(--primary-color-translucent);
+  /* Dark theme adjustments */
+  :global([data-theme="dark"]) .suggestion-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .suggestion-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(20, 184, 166, 0.1), rgba(20, 184, 166, 0.05));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: inherit;
+  }
+
+  .suggestion-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(20, 184, 166, 0.3);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.04),
+      0 2px 4px rgba(20, 184, 166, 0.1);
+  }
+
+  .suggestion-card:hover::before {
+    opacity: 1;
+  }
+
+  .suggestion-card:active {
+    transform: translateY(0);
+    transition: transform 0.1s ease;
+  }
+
+  /* Dark theme hover adjustments */
+  :global([data-theme="dark"]) .suggestion-card:hover {
+    border-color: rgba(20, 184, 166, 0.4);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.2),
+      0 2px 4px rgba(20, 184, 166, 0.15);
   }
 
   /* Responsive adjustments */
@@ -90,9 +136,27 @@
     .suggestions-container {
       margin-top: 0.75rem;
     }
-    .suggestion-pill {
-      padding: 0.4rem 0.8rem;
+    
+    .suggestions-grid {
+      gap: 0.625rem;
+    }
+    
+    .suggestion-card {
+      padding: 0.625rem 1rem;
+      font-size: 0.8125rem;
+      min-height: 40px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .suggestions-grid {
+      gap: 0.5rem;
+    }
+    
+    .suggestion-card {
+      padding: 0.5rem 0.875rem;
       font-size: 0.8rem;
+      min-height: 38px;
     }
   }
 </style>
