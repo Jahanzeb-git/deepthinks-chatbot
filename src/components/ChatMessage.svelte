@@ -9,16 +9,57 @@
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
   import FileCard from './shared/FileCard.svelte';
 
+  interface FileMetadata {
+    id: string;
+    original_name: string;
+    stored_name: string;
+    size: number;
+    type: string;
+    uploaded_at: string;
+    is_image: boolean;
+  }
+
   export let messageId: string;
   export let isLastAiMessage: boolean = false;
   export let isSharedView: boolean = false;
 
   $: message = $chatStore.messages.find(m => m.id === messageId);
   $: activeFileKey = $artifactStore.activeFileKey;
+  $: fileAttachments = (message?.type === 'user' && message.content) 
+    ? (() => {
+        try {
+          const parsed = JSON.parse(message.content);
+          return parsed.files || null;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
   let messageElement: HTMLDivElement;
   let mounted = false;
   let copied = false;
+
+  $: userPromptText = (() => {
+    if (message?.type !== 'user') return '';
+    try {
+      const parsed = JSON.parse(message.content);
+      return parsed.prompt ?? message.content;
+    } catch (e) {
+      return message.content;
+    }
+  })();
+
+  $: fileAttachments = (message?.type === 'user' && message.content) 
+  ? (() => {
+      try {
+        const parsed = JSON.parse(message.content);
+        return parsed.files || null;
+      } catch {
+        return null;
+      }
+    })()
+  : null;
 
   const dispatch = createEventDispatcher<{
     regenerate: { messageId: string }
@@ -108,6 +149,61 @@
     dispatch('regenerate', { messageId: message.id });
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  }
+
+  async function handleFileClick(file: FileMetadata) {
+    const token = localStorage.getItem('deepthinks_token');
+    const sessions = JSON.parse(localStorage.getItem('deepthinks_sessions') || '[]');
+    const sessionId = sessions[0] || '';
+
+    if (!token || !sessionId) {
+      alert('Authentication required');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://jahanzebahmed25.pythonanywhere.com/files/${sessionId}/${file.stored_name}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to load file');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      if (file.is_image || file.type.includes('pdf')) {
+        // Open in new tab
+        window.open(url, '_blank');
+      } else {
+        // Download file
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.original_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (error) {
+      console.error('File access error:', error);
+      alert('Failed to access file');
+    }
+  }
+
   onMount(() => {
     mounted = true;
     if (messageElement) {
@@ -128,10 +224,43 @@
     <div class="message-avatar">
       <User size={18} />
     </div>
-  {/if}
-  
-  <div class="message-content">
-    {#if message.type === 'ai'}
+    <div class="message-content">
+      <!-- File attachments above message -->
+      {#if fileAttachments && Array.isArray(fileAttachments) && fileAttachments.length > 0}
+        <div class="file-attachments">
+          {#each fileAttachments as file}
+            <button 
+              class="file-attachment-btn"
+              on:click={() => handleFileClick(file)}
+            >
+              <div class="file-att-icon">
+                {#if file.is_image}
+                  🖼️
+                {:else if file.type.includes('pdf')}
+                  📄
+                {:else if file.type.includes('word') || file.type.includes('document')}
+                  📝
+                {:else if file.type.includes('sheet') || file.type.includes('csv')}
+                  📊
+                {:else}
+                  📎
+                {/if}
+              </div>
+              <div class="file-att-info">
+                <span class="file-att-name">{file.original_name}</span>
+                <span class="file-att-size">{formatBytes(file.size)}</span>
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+      
+      <div class="user-message">
+        {userPromptText}
+      </div>
+    </div>
+  {:else} <!-- This is for message.type === 'ai' -->
+    <div class="message-content">
       {#if message.mode === 'code'}
         <div class="code-message" use:renderMath>
           {#each codeBlocks as block (block.id)}
@@ -166,12 +295,8 @@
           {/each}
         </div>
       {/if}
-    {:else}
-      <div class="user-message">
-        {message.content}
-      </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 {#if message.type === 'ai' && !message.isStreaming && (message.content || message.interrupted)}
@@ -218,4 +343,54 @@
   .file-card-button { background: none; border: none; padding: 0; cursor: pointer; display: block; width: 100%; text-align: left; }
   .file-text { padding: 0.5rem; margin-top: 0.5rem; background: var(--surface-color); border-radius: 8px; }
   @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .file-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .file-attachment-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: 200px;
+  }
+  .file-attachment-btn:hover {
+    border-color: var(--primary-color);
+    background: var(--hover-color);
+    transform: translateY(-1px);
+  }
+
+  .file-att-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+  .file-att-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .file-att-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .file-att-size {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
 </style>

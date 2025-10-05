@@ -199,10 +199,14 @@ export const api = {
   },
 
   // File Upload
-  async uploadFile(file: File, sessionId: string, token: string) {
+  async uploadFile(files: File[], sessionId: string, token: string) {
     const formData = new FormData();
-    formData.append('file', file);
     formData.append('session_id', sessionId);
+
+    // Append multiple files
+    files.forEach(file => {
+      formData.append('files', file);
+    });
 
     const response = await fetch(`${BASE_URL}/upload`, {
       method: 'POST',

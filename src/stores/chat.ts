@@ -219,13 +219,33 @@ function createChatStore() {
       }));
     },
 
-    loadSessionMessages: (messages: Array<{prompt: string, response: string, timestamp: string}>) => {
+    loadSessionMessages: (messages: Array<{prompt: string, response: string, timestamp: string, files?: any[]}>) => {
       const chatMessages: ChatMessage[] = [];
       messages.forEach(msg => {
+        let userContent = msg.prompt;
+
+        // Handle file attachments from history
+        if (msg.files && Array.isArray(msg.files) && msg.files.length > 0) {
+          const fileMetadata = msg.files.map(f => ({
+            id: f.id.toString(),
+            original_name: f.original_name,
+            stored_name: f.stored_name,
+            size: f.size,
+            type: f.mime_type, // Map mime_type to type
+            is_image: Boolean(f.is_image), // Convert 0/1 to boolean
+            uploaded_at: f.uploaded_at,
+          }));
+
+          userContent = JSON.stringify({
+            prompt: msg.prompt,
+            files: fileMetadata // Use plural `files`
+          });
+        }
+
         chatMessages.push({
           id: crypto.randomUUID(),
           type: 'user',
-          content: msg.prompt,
+          content: userContent,
           timestamp: new Date(msg.timestamp)
         });
 

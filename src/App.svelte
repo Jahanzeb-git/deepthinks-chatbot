@@ -12,6 +12,7 @@
   import { sessionUuidStore } from './stores/sessionUuid';
   import { shareStore } from './stores/share';
   import { artifactStore } from './stores/artifact';
+  import { fileStore } from './stores/file';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
   import { derived } from 'svelte/store';
@@ -371,8 +372,36 @@
       history.pushState({}, '', `/${uuid}`);
     }
     const { message, reason } = event.detail;
-    chatStore.addUserMessage(message);
+
+    // Combine message with file data for UI display
+    const files = $fileStore.files;
+    let userContent = message;
+
+    if (files.length > 0 && files.every(f => f.uploadStatus === 'success')) {
+      const fileMetadata = files.map(f => ({
+        id: f.storedName, // Use the unique stored name for the ID
+        original_name: f.originalName,
+        stored_name: f.storedName,
+        size: f.size,
+        type: f.type,
+        is_image: f.isImage,
+        uploaded_at: new Date().toISOString(), // Add current timestamp
+      }));
+      userContent = JSON.stringify({
+        prompt: message,
+        files: fileMetadata
+      });
+    }
+
+    chatStore.addUserMessage(userContent);
+    
+    // Submit only the text prompt to the backend
     await submitPrompt(message, reason);
+
+    // Clear files after they have been associated with a message
+    if (files.length > 0) {
+      fileStore.clearFiles();
+    }
   }
 
   async function handleWelcomePrompt(event: CustomEvent<string>) {

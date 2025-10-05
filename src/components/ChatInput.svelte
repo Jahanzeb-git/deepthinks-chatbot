@@ -5,6 +5,7 @@
   import { settingsStore } from '../stores/settings';
   import { authStore } from '../stores/auth';
   import { fileStore } from '../stores/file';
+  import { api } from '../lib/api';
   import Tooltip from './shared/Tooltip.svelte';
   import FileUploader from './FileUploader.svelte';
 
@@ -87,8 +88,44 @@
     localStorage.removeItem(DRAFT_KEY);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (message.trim() && !isStreaming) {
+      // Upload files if any
+      if ($fileStore.files.length > 0) {
+        const token = localStorage.getItem('deepthinks_token');
+        const sessions = JSON.parse(localStorage.getItem('deepthinks_sessions') || '[]');
+        const sessionId = sessions[0] || '';
+
+        if (!token || !sessionId) {
+          alert('Please log in to upload files.');
+          return;
+        }
+
+        try {
+          fileStore.setUploadStatus('uploading');
+        
+          const filesToUpload = $fileStore.files.map(f => f.file);
+          const response = await api.uploadFile(filesToUpload, sessionId, token);
+        
+          if (response.error) {
+            fileStore.setUploadStatus('error', response.message || response.error);
+            return;
+          }
+
+          // Update stored names
+          if (response.files && Array.isArray(response.files)) {
+            response.files.forEach((uploadedFile: any, index: number) => {
+              fileStore.updateFileAfterUpload(index, uploadedFile.stored_name);
+            });
+          }
+
+          fileStore.setUploadStatus('success');
+        } catch (error: any) {
+          fileStore.setUploadStatus('error', error.message || 'Upload failed');
+          return;
+        }
+      }
+
       const reason = codingMode ? 'code' : reasoning ? 'reason' : 'default';
       dispatch('submit', { message: message.trim(), reason });
       message = '';
@@ -96,7 +133,6 @@
       if (textareaElement) {
         textareaElement.style.height = 'auto';
       }
-      fileStore.clearFile();
       showFileUploader = false;
     }
   }
