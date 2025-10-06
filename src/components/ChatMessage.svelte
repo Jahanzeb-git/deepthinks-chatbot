@@ -256,7 +256,7 @@
       {/if}
       
       <div class="user-message">
-        {userPromptText}
+        <pre class="user-message-text">{userPromptText}</pre>
       </div>
     </div>
   {:else} <!-- This is for message.type === 'ai' -->
@@ -392,5 +392,12 @@
   .file-att-size {
     font-size: 0.65rem;
     color: var(--text-muted);
+  }
+
+  .user-message-text {
+    margin: 0;
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
   }
 </style>

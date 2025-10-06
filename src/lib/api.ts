@@ -299,5 +299,23 @@ export const api = {
     return makeRequest('/user/key', {
       method: 'DELETE'
     });
-  }
+  },
+
+  // File Management
+  async listFiles() {
+    return makeRequest('/files/list');
+  },
+
+  async deleteFiles(storedNames?: string[], deleteAll?: boolean) {
+    const body: { stored_names?: string[]; delete_all?: boolean } = {};
+    if (deleteAll) {
+      body.delete_all = true;
+    } else if (storedNames && storedNames.length > 0) {
+      body.stored_names = storedNames;
+    }
+    return makeRequest('/files', {
+      method: 'DELETE',
+      body: JSON.stringify(body)
+    });
+  },
 };

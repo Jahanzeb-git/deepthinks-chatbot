@@ -108,7 +108,12 @@
           const response = await api.uploadFile(filesToUpload, sessionId, token);
         
           if (response.error) {
-            fileStore.setUploadStatus('error', response.message || response.error);
+            const errorMsg = response.message || response.error;
+            fileStore.setUploadStatus('error', errorMsg);
+            // Show alert for upload limit
+            if (errorMsg.includes('limit') || errorMsg.includes('30 files')) {
+              alert('Upload limit reached: You can upload a maximum of 30 files per account.');
+            }
             return;
           }
 
@@ -358,10 +363,6 @@
     margin-left: auto; /* Push send button to the right */
   }
 
-  .input-wrapper:focus-within {
-    border-color: var(--primary-color, #3b82f6);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
-  }
 
   .chat-textarea {
     flex-grow: 1;

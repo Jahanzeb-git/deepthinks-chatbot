@@ -67,11 +67,21 @@ function createFileStore() {
     },
 
     setUploadStatus: (status: 'uploading' | 'success' | 'error', error?: string) => {
-      update(state => ({
-        ...state,
-        status,
-        error: error || null
-      }));
+      update(state => {
+        // If upload limit reached, clear files
+        if (error && (error.includes('limit') || error.includes('30 files'))) {
+          return {
+            files: [],
+            status: 'error',
+            error: error || null
+          };
+        }
+        return {
+          ...state,
+          status,
+          error: error || null
+        };
+      });
     },
 
     updateFileAfterUpload: (index: number, storedName: string) => {

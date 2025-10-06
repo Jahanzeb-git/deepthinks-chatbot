@@ -5,11 +5,12 @@
   import { analyticsStore } from '../../stores/analytics';
   import Modal from './Modal.svelte';
   import Toggle from '../shared/Toggle.svelte';
-  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info } from 'lucide-svelte';
+  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info, FileText, FileCode, FileImage, Download } from 'lucide-svelte';
   import DataControlModal from './DataControlModal.svelte';
   import { get } from 'svelte/store';
   import { tick, onMount } from 'svelte';
   import { api } from '../../lib/api'; // Import the API utility
+	
 
   // Use a local variable for the input to avoid debouncing issues
   let nameInputValue: string = '';
@@ -30,9 +31,18 @@
   let hasTogetherApiKey: boolean = false;
   let apiKeyStatusMessage: string = 'App specific API key is in use.'; // New state for status message
 
+  // Files Management State
+  let filesData: any[] = [];
+  let isLoadingFiles = false;
+  let filesError: string | null = null;
+  let selectedFiles: string[] = [];
+  let showDeleteFilesConfirmation = false;
+  let isDeletingFiles = false;
+
   const sections = {
     General: { icon: User, description: 'Personalization & appearance' },
     Account: { icon: KeyRound, description: 'Profile & security' },
+    Files: { icon: Database, description: 'Manage uploaded files' },
     'Data Control': { icon: Database, description: 'Privacy & data management' },
   };
   const sectionKeys = Object.keys(sections);
@@ -232,10 +242,93 @@
     }
   }
 
+  async function loadFiles() {
+  	isLoadingFiles = true;
+  	filesError = null;
+  	try {
+    	const response = await api.listFiles();
+    	filesData = response.files || [];
+  	} catch (error: any) {
+    	console.error('Failed to load files:', error);
+    	filesError = error.message || 'Failed to load files';
+  	} finally {
+    	isLoadingFiles = false;
+  	}
+	}
+
+	function toggleFileSelection(storedName: string) {
+  	if (selectedFiles.includes(storedName)) {
+    	selectedFiles = selectedFiles.filter(f => f !== storedName);
+  	} else {
+    	selectedFiles = [...selectedFiles, storedName];
+  	}
+	}
+
+	function selectAllFiles() {
+  	selectedFiles = filesData.map(f => f.stored_name);
+	}
+
+	function deselectAllFiles() {
+  	selectedFiles = [];
+	}
+
+	async function confirmDeleteFiles(deleteAll: boolean = false) {
+  	isDeletingFiles = true;
+  	try {
+    	if (deleteAll) {
+      	await api.deleteFiles(undefined, true);
+    	} else {
+      	await api.deleteFiles(selectedFiles);
+    	}
+    	selectedFiles = [];
+    	await loadFiles();
+    	showDeleteFilesConfirmation = false;
+  	} catch (error: any) {
+    	console.error('Failed to delete files:', error);
+    	filesError = error.message || 'Failed to delete files';
+  	} finally {
+    	isDeletingFiles = false;
+  	}
+	}
+
+	function formatFileDate(dateString: string): string {
+  	const date = new Date(dateString);
+  	return date.toLocaleDateString('en-US', { 
+    	year: 'numeric', 
+    	month: 'short', 
+    	day: 'numeric' 
+  	});
+	}
+
+	function getFileIcon(mimeType: string, fileName: string) {
+  	const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  
+  	if (mimeType.startsWith('image/')) return { icon: FileImage, color: '#10b981' };
+  
+  	const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'cs'];
+  	if (codeExts.includes(ext)) return { icon: FileCode, color: '#3b82f6' };
+  
+  	return { icon: FileText, color: '#8b5cf6' };
+	}
+
+	function formatBytes(bytes: number): string {
+  	if (bytes === 0) return '0 B';
+  	const k = 1024;
+  	const sizes = ['B', 'KB', 'MB', 'GB'];
+  	const i = Math.floor(Math.log(bytes) / Math.log(k));
+  	return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+	}
+
   onMount(async () => {
-    await fetchMaskedTogetherApiKey();
-    analyticsStore.syncAnalytics();
-  });
+  	await fetchMaskedTogetherApiKey();
+  	analyticsStore.syncAnalytics();
+  	if (activeTab === 'Files') {
+    	await loadFiles();
+  	}
+	});
+	$: if (activeTab === 'Files' && $settingsStore.isSettingsModalOpen && filesData.length === 0 && !isLoadingFiles) {
+  	loadFiles();
+	}
 </script>
 
 <Modal
@@ -361,7 +454,117 @@
               </div>
             </div>
 
-          {:else if activeTab === 'Data Control'}
+          {:else if activeTab === 'Files'}
+            <div class="settings-section">
+              <div class="section-header">
+                <button class="mobile-nav-btn prev" on:click={prevTab} class:visible={activeTab !== 'General'}>
+                  <ChevronLeft size={24} />
+                </button>
+                <div class="header-content">
+                  <h3 class="section-title">File Management</h3>
+                  <p class="section-desc">View and manage your uploaded files</p>
+                </div>
+                <button class="mobile-nav-btn next" on:click={nextTab} class:visible={activeTab !== 'Data Control'}>
+                  <ChevronRight size={24} />
+                </button>
+              </div>
+              
+              <div class="settings-grid">
+                <div class="setting-card full-width">
+                  <div class="files-management">
+                    {#if isLoadingFiles}
+                      <div class="loading-state">
+                        <div class="spinner"></div>
+                        <span>Loading files...</span>
+                      </div>
+                    {:else if filesError}
+                      <div class="error-state">
+                        <AlertTriangle size={24} />
+                        <span>{filesError}</span>
+                        <button class="action-btn primary" on:click={loadFiles}>
+                          Retry
+                        </button>
+                      </div>
+                    {:else if filesData.length === 0}
+                      <div class="empty-state">
+                        <Database size={48} />
+                        <h4>No files uploaded</h4>
+                        <p>Upload files in your conversations to see them here</p>
+                      </div>
+                    {:else}
+                      <div class="files-header">
+                        <div class="files-count">
+                          <span class="count-number">{filesData.length}</span>
+                          <span class="count-label">file{filesData.length !== 1 ? 's' : ''}</span>
+                          {#if selectedFiles.length > 0}
+                            <span class="selected-count">({selectedFiles.length} selected)</span>
+                          {/if}
+                        </div>
+                        <div class="files-actions">
+                          {#if selectedFiles.length > 0}
+                            <button class="action-btn secondary" on:click={deselectAllFiles}>
+                              Deselect All
+                            </button>
+                            <button class="action-btn danger" on:click={() => showDeleteFilesConfirmation = true}>
+                              <Trash2 size={16} />
+                              Delete Selected
+                            </button>
+                          {:else}
+                            <button class="action-btn secondary" on:click={selectAllFiles}>
+                              Select All
+                            </button>
+                            <button class="action-btn danger" on:click={() => { selectedFiles = []; showDeleteFilesConfirmation = true; }}>
+                              <Trash2 size={16} />
+                              Delete All
+                            </button>
+                          {/if}
+                        </div>
+                      </div>
+                      
+                      <div class="files-list">
+                        {#each filesData as file (file.id)}
+                          {@const fileIconData = getFileIcon(file.mime_type, file.original_name)}
+                          <div class="file-item" class:selected={selectedFiles.includes(file.stored_name)}>
+                            <input 
+                              type="checkbox" 
+                              class="file-checkbox"
+                              checked={selectedFiles.includes(file.stored_name)}
+                              on:change={() => toggleFileSelection(file.stored_name)}
+                            />
+                            <div class="file-item-icon" style="background-color: {fileIconData.color}15; color: {fileIconData.color};">
+                              <svelte:component this={fileIconData.icon} size={20} />
+                            </div>
+                            <div class="file-item-info">
+                              <div class="file-item-name">{file.original_name}</div>
+                              <div class="file-item-meta">
+                                <span>{formatBytes(file.size)}</span>
+                                <span>•</span>
+                                <span>{formatFileDate(file.uploaded_at)}</span>
+                                {#if file.session_number}
+                                  <span>•</span>
+                                  <span>Session {file.session_number}</span>
+                                {/if}
+                              </div>
+                            </div>
+                            <button 
+                              class="file-item-delete"
+                              on:click={() => {
+                                selectedFiles = [file.stored_name];
+                                showDeleteFilesConfirmation = true;
+                              }}
+                              title="Delete file"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            </div>
+{:else if activeTab === 'Data Control'}
             <div class="settings-section">
               <div class="section-header">
                 <button class="mobile-nav-btn prev" on:click={prevTab} class:visible={activeTab !== 'General'}>
@@ -632,6 +835,41 @@
           {:else}
             <Trash2 size={16} />
             Remove Key
+          {/if}
+        </button>
+      </div>
+    </div>
+  </Modal>
+{/if}
+{#if showDeleteFilesConfirmation}
+  <Modal isOpen={true} on:close={() => showDeleteFilesConfirmation = false} title="Delete Files">
+    <div class="confirmation-modal">
+      <div class="confirmation-header">
+        <div class="confirmation-icon danger">
+          <AlertTriangle size={48} />
+        </div>
+        <h2 class="confirmation-title">
+          {selectedFiles.length === 0 ? 'Delete All Files?' : `Delete ${selectedFiles.length} File${selectedFiles.length !== 1 ? 's' : ''}?`}
+        </h2>
+        <p class="confirmation-desc">
+          This action cannot be undone. The files will be permanently removed from your account.
+        </p>
+      </div>
+      <div class="confirmation-actions">
+        <button class="confirmation-btn secondary" on:click={() => showDeleteFilesConfirmation = false} disabled={isDeletingFiles}>
+          Cancel
+        </button>
+        <button 
+          class="confirmation-btn danger" 
+          on:click={() => confirmDeleteFiles(selectedFiles.length === 0)}
+          disabled={isDeletingFiles}
+        >
+          {#if isDeletingFiles}
+            <div class="spinner small"></div>
+            Deleting...
+          {:else}
+            <Trash2 size={16} />
+            Delete
           {/if}
         </button>
       </div>
@@ -1559,4 +1797,181 @@
       font-size: 0.8rem;
     }
   }
+.files-management {
+  width: 100%;
+}
+
+.loading-state, .error-state, .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.error-state {
+  color: #ef4444;
+}
+
+.empty-state {
+  color: var(--text-muted);
+}
+
+.empty-state h4 {
+  margin: 0.5rem 0 0.25rem;
+  color: var(--text-color);
+  font-size: 1.1rem;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.files-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.count-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.count-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.selected-count {
+  font-size: 0.85rem;
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.files-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  border-color: var(--primary-color-translucent);
+  background: var(--surface-color);
+}
+
+.file-item.selected {
+  border-color: var(--primary-color);
+  background: var(--primary-color-translucent);
+}
+
+.file-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.file-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-item-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.file-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.file-item-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+ @media (max-width: 768px) {
+  .files-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .files-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .files-actions .action-btn {
+    width: 100%;
+  }
+
+  .file-item-meta {
+    flex-wrap: wrap;
+  }
+}
 </style>
