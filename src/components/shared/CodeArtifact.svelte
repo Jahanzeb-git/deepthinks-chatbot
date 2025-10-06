@@ -293,7 +293,6 @@
     background: var(--background-color);
     color: var(--text-color);
     border-left: 1px solid var(--border-color);
-    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
     z-index: 500;
     display: flex;
     flex-direction: column;

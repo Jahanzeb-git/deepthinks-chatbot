@@ -170,7 +170,6 @@
   }
   .sidebar-wrapper.expanded .sidebar {
     width: var(--sidebar-expanded-width, 300px);
-    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.12);
   }
   
   .sidebar-content {
