@@ -44,9 +44,15 @@ button:focus-visible {
 }
 
 :root {
+  --divider: rgba(0,0,0,0.15); /* light theme */
   --reasoning-bg: rgba(59, 130, 246, 0.05);
   --reasoning-border: rgba(59, 130, 246, 0.2);
 }
+[data-theme="dark"] {
+  --divider: rgba(255,255,255,0.12); /* dark theme */
+}
+
+
 
 @media (prefers-color-scheme: dark) {
   :root {

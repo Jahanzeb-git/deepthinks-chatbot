@@ -400,4 +400,15 @@
     white-space: pre-wrap;
     word-wrap: break-word;
   }
+
+  .ai-message :global(hr),
+  .code-message :global(hr),
+  .markdown-content :global(hr),
+  .user-message :global(hr) {
+    border: none;
+    border-top: 1px solid var(--divider, rgba(0,0,0,0.08));
+    height: 1px;
+    margin: 0.9rem 0;
+    pointer-events: none;
+  }
 </style>
