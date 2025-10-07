@@ -22,10 +22,10 @@ export interface ChatMessage {
   model?: string;
   mode?: 'default' | 'reason' | 'code';
   codeModeContent?: CodeModeContent;
-  toolCall?: {
+  toolCalls?: {
     name: string;
     query: string;
-  };
+  }[];
 }
 
 export const isCodingMode = writable(false);
@@ -95,6 +95,7 @@ function createChatStore() {
         isStreaming: true,
         model: model,
         mode: mode,
+        toolCalls: [],
         ...(mode === 'code' && { codeModeContent: { Files: [] } })
       };
 
@@ -149,12 +150,12 @@ function createChatStore() {
       });
     },
 
-    setToolCall: (messageId: string, toolCall: { name: string; query: string; }) => {
+    addToolCall: (messageId: string, toolCall: { name: string; query: string; }) => {
       update(state => ({
         ...state,
         messages: state.messages.map(msg => 
           msg.id === messageId 
-            ? { ...msg, toolCall }
+            ? { ...msg, toolCalls: [...(msg.toolCalls || []), toolCall] }
             : msg
         )
       }));

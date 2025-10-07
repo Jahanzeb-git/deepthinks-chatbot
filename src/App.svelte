@@ -246,7 +246,7 @@
     unauthenticatedSessionId = generateSessionId();
   }
   
-  async function submitPrompt(message: string, reason: 'default' | 'reason' | 'code' = 'default') {
+async function submitPrompt(message: string, reason: 'default' | 'reason' | 'code' = 'default') {
     abortController = new AbortController();
     
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
@@ -309,22 +309,22 @@
         const textPart = chunk.substring(0, jsonStartIndex);
         if (textPart) {
           accumulatedContent += textPart;
-          chatStore.updateStreamingMessage(messageId, accumulatedContent);
         }
         isParsingJson = true;
         jsonBuffer = chunk.substring(jsonStartIndex);
       } else if (isParsingJson) {
         jsonBuffer += chunk;
-      } else {
+      }
+       else {
         accumulatedContent += chunk;
-        chatStore.updateStreamingMessage(messageId, accumulatedContent);
       }
 
       if (isParsingJson) {
         try {
           const parsed = JSON.parse(jsonBuffer);
           if (parsed && parsed.tool_call === 'search_web' && parsed.query) {
-            chatStore.setToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
+            chatStore.addToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
+            accumulatedContent += '<--tool-call-->';
           }
           isParsingJson = false;
           jsonBuffer = '';
@@ -332,6 +332,8 @@
           // JSON not complete yet, wait for more tokens
         }
       }
+
+      chatStore.updateStreamingMessage(messageId, accumulatedContent);
     };
 
     const onEnd = async () => {

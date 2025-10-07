@@ -50,22 +50,12 @@
     }
   })();
 
-  $: fileAttachments = (message?.type === 'user' && message.content) 
-  ? (() => {
-      try {
-        const parsed = JSON.parse(message.content);
-        return parsed.files || null;
-      } catch {
-        return null;
-      }
-    })()
-  : null;
+  $: contentParts = message ? message.content.split('<--tool-call-->') : [''];
 
   const dispatch = createEventDispatcher<{
     regenerate: { messageId: string }
   }>();
 
-  type Segment = { type: 'normal' | 'thinking'; content: string; };
   type CodeBlock = {
     id: number;
     type: 'text' | 'file' | 'conclusion';
@@ -78,7 +68,6 @@
     };
   };
 
-  let segments: Segment[] = [];
   let codeBlocks: CodeBlock[] = [];
   
   $: if (message) {
@@ -112,16 +101,6 @@
           newBlocks.push({ id: idCounter++, type: 'conclusion', content: content.Conclusion });
         }
         codeBlocks = newBlocks;
-      } else if (message.mode !== 'code') {
-        const parts = message.content.split(/(<think>|<\/think>)/g);
-        const newSegments: Segment[] = [];
-        let inThinkingBlock = false;
-        for (const part of parts) {
-          if (part === '<think>') inThinkingBlock = true;
-          else if (part === '</think>') inThinkingBlock = false;
-          else if (part) newSegments.push({ type: inThinkingBlock ? 'thinking' : 'normal', content: part });
-        }
-        segments = newSegments;
       }
     }
   }
@@ -260,20 +239,7 @@
       </div>
     </div>
   {:else} <!-- This is for message.type === 'ai' -->
-  <div class="message-content">
-    {#if message.toolCall}
-      <div class="tool-call-container">
-        <div class="tool-call-icon">
-          <Search size={16} />
-        </div>
-        <div class="tool-call-info">
-          <span class="tool-call-name">Searching the web...</span>
-          <span class="tool-call-query">'{message.toolCall.query}'</span>
-        </div>
-      </div>
-    {/if}
-    
-    {#if !message.toolCall || message.content.trim()}
+    <div class="message-content">
       {#if message.mode === 'code'}
         <div class="code-message" use:renderMath>
           {#each codeBlocks as block (block.id)}
@@ -299,18 +265,25 @@
         </div>
       {:else}
         <div class="ai-message" use:renderMath>
-          {#each segments as segment}
-            {#if segment.type === 'thinking'}
-              <ReasoningBlock content={segment.content} streaming={message.isStreaming} />
-            {:else if segment.content}
-              {@html renderMarkdown(segment.content)}
+          {#each contentParts as part, i}
+            {@html renderMarkdown(part)}
+            
+            {#if i < contentParts.length - 1 && message.toolCalls && message.toolCalls[i]}
+              <div class="tool-call-container">
+                <div class="tool-call-icon">
+                  <Search size={16} />
+                </div>
+                <div class="tool-call-info">
+                  <span class="tool-call-name">Searching the web...</span>
+                  <span class="tool-call-query">'{message.toolCalls[i].query}'</span>
+                </div>
+              </div>
             {/if}
           {/each}
         </div>
       {/if}
-    {/if}
-  </div>
-{/if}
+    </div>
+  {/if}
 </div>
 
 {#if message.type === 'ai' && !message.isStreaming && (message.content || message.interrupted)}
