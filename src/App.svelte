@@ -257,6 +257,9 @@
     let streamEnded = false;
     let streamProcessor: StreamProcessor | null = null;
 
+    let jsonBuffer = '';
+    let isParsingJson = false;
+
     if (reason === 'code') {
       streamProcessor = new StreamProcessor();
       let currentArtifactFileIndex = -1; // Track which file is currently in artifact
@@ -290,17 +293,44 @@
 
     const onData = (data: { token: string, trace: boolean }) => {
       if (streamEnded) return;
-
       if (!firstTokenReceived) {
         chatStore.setLoading(false);
         firstTokenReceived = true;
       }
-      accumulatedContent += data.token;
-
       if (streamProcessor) {
         streamProcessor.process(data.token);
+        return;
+      }
+
+      let chunk = data.token;
+
+      if (!isParsingJson && chunk.includes('{')) {
+        const jsonStartIndex = chunk.indexOf('{');
+        const textPart = chunk.substring(0, jsonStartIndex);
+        if (textPart) {
+          accumulatedContent += textPart;
+          chatStore.updateStreamingMessage(messageId, accumulatedContent);
+        }
+        isParsingJson = true;
+        jsonBuffer = chunk.substring(jsonStartIndex);
+      } else if (isParsingJson) {
+        jsonBuffer += chunk;
       } else {
+        accumulatedContent += chunk;
         chatStore.updateStreamingMessage(messageId, accumulatedContent);
+      }
+
+      if (isParsingJson) {
+        try {
+          const parsed = JSON.parse(jsonBuffer);
+          if (parsed && parsed.tool_call === 'search_web' && parsed.query) {
+            chatStore.setToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
+          }
+          isParsingJson = false;
+          jsonBuffer = '';
+        } catch (e) {
+          // JSON not complete yet, wait for more tokens
+        }
       }
     };
 

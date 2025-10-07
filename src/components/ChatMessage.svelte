@@ -2,7 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
-  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle } from 'lucide-svelte';
+  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import { chatStore } from '../stores/chat';
   import { artifactStore } from '../stores/artifact';
@@ -260,7 +260,20 @@
       </div>
     </div>
   {:else} <!-- This is for message.type === 'ai' -->
-    <div class="message-content">
+  <div class="message-content">
+    {#if message.toolCall}
+      <div class="tool-call-container">
+        <div class="tool-call-icon">
+          <Search size={16} />
+        </div>
+        <div class="tool-call-info">
+          <span class="tool-call-name">Searching the web...</span>
+          <span class="tool-call-query">'{message.toolCall.query}'</span>
+        </div>
+      </div>
+    {/if}
+    
+    {#if !message.toolCall || message.content.trim()}
       {#if message.mode === 'code'}
         <div class="code-message" use:renderMath>
           {#each codeBlocks as block (block.id)}
@@ -295,8 +308,9 @@
           {/each}
         </div>
       {/if}
-    </div>
-  {/if}
+    {/if}
+  </div>
+{/if}
 </div>
 
 {#if message.type === 'ai' && !message.isStreaming && (message.content || message.interrupted)}
@@ -410,5 +424,40 @@
     height: 1px;
     margin: 0.9rem 0;
     pointer-events: none;
+  }
+
+  .tool-call-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    max-width: max-content;
+  }
+
+  .tool-call-icon {
+    color: var(--primary-color);
+    flex-shrink: 0;
+  }
+
+  .tool-call-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .tool-call-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+  }
+
+  .tool-call-query {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
   }
 </style>

@@ -22,6 +22,10 @@ export interface ChatMessage {
   model?: string;
   mode?: 'default' | 'reason' | 'code';
   codeModeContent?: CodeModeContent;
+  toolCall?: {
+    name: string;
+    query: string;
+  };
 }
 
 export const isCodingMode = writable(false);
@@ -143,6 +147,17 @@ function createChatStore() {
       updateCodeContent(messageId, content => {
         content.Conclusion = (content.Conclusion || '') + chunk;
       });
+    },
+
+    setToolCall: (messageId: string, toolCall: { name: string; query: string; }) => {
+      update(state => ({
+        ...state,
+        messages: state.messages.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, toolCall }
+            : msg
+        )
+      }));
     },
 
     updateStreamingMessage: (messageId: string, content: string) => {
