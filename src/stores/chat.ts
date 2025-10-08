@@ -265,23 +265,82 @@ function createChatStore() {
           timestamp: new Date(msg.timestamp)
         });
 
+        // Process AI message
         let mode: ChatMessage['mode'] = 'default';
         let codeModeContent: CodeModeContent | null = null;
+        let content = msg.response;
+        let toolCalls: ChatMessage['toolCalls'] = [];
+
         try {
+          // First, try to parse as a full JSON object (for code mode)
           const parsed = JSON.parse(msg.response);
           if (parsed && typeof parsed === 'object' && ('Files' in parsed || 'Conclusion' in parsed)) {
             mode = 'code';
             codeModeContent = parsed;
+            // For code mode, the raw content is the stringified JSON
+            content = JSON.stringify(parsed, null, 2);
           }
-        } catch (e) { /* Not a JSON object */ }
+        } catch (e) {
+          // If parsing fails, it's not a code-mode object. Check for embedded tool calls.
+          const toolCallStartTag = '{"tool_call":';
+          if (msg.response.includes(toolCallStartTag)) {
+            const parts = [];
+            let remainingText = msg.response;
+            let startIndex = remainingText.indexOf(toolCallStartTag);
+
+            while (startIndex !== -1) {
+              parts.push(remainingText.substring(0, startIndex));
+              
+              let openBraces = 0;
+              let endIndex = -1;
+              for (let i = startIndex; i < remainingText.length; i++) {
+                if (remainingText[i] === '{') {
+                  openBraces++;
+                } else if (remainingText[i] === '}') {
+                  openBraces--;
+                  if (openBraces === 0) {
+                    endIndex = i + 1;
+                    break;
+                  }
+                }
+              }
+
+              if (endIndex !== -1) {
+                const jsonStr = remainingText.substring(startIndex, endIndex);
+                try {
+                  const parsedTool = JSON.parse(jsonStr);
+                  if (parsedTool.tool_call && parsedTool.query) {
+                    toolCalls.push({ name: parsedTool.tool_call, query: parsedTool.query });
+                    remainingText = remainingText.substring(endIndex);
+                  } else {
+                    parts.push(jsonStr);
+                    remainingText = remainingText.substring(endIndex);
+                  }
+                } catch {
+                  parts.push(jsonStr);
+                  remainingText = remainingText.substring(endIndex);
+                }
+              } else {
+                parts.push(remainingText.substring(startIndex));
+                remainingText = '';
+                break;
+              }
+              startIndex = remainingText.indexOf(toolCallStartTag);
+            }
+            parts.push(remainingText);
+            content = parts.join('<--tool-call-->');
+          }
+          // If no tool calls found, content remains msg.response (plain text)
+        }
 
         chatMessages.push({
           id: crypto.randomUUID(),
           type: 'ai',
-          content: msg.response,
+          content: content,
           timestamp: new Date(msg.timestamp),
           mode: mode,
-          codeModeContent: codeModeContent
+          codeModeContent: codeModeContent,
+          toolCalls: toolCalls
         });
       });
       
