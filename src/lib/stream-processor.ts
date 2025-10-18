@@ -7,11 +7,13 @@ export interface StreamProcessorCallbacks {
   onConclusionChunk?: (chunk: string) => void;
   onFileStart?: (fileIndex: number) => void;
   onComplete?: () => void;
+  onToolCall?: (toolData: { name: string; query: string; position: 'after_text' | 'after_file' | 'before_conclusion' }, fileIndex?: number) => void;
 }
 
 enum State {
   Idle,             // Looking for a key
   StreamingValue,    // Streaming the value of a found key
+  ParsingToolCall,
 }
 
 export class StreamProcessor {
@@ -20,6 +22,9 @@ export class StreamProcessor {
   private currentKey: string = '';
   private fileIndex: number = -1;
   private callbacks: StreamProcessorCallbacks = {};
+  private toolCallBuffer: string = '';  // NEW
+  private toolCallPosition: 'after_text' | 'after_file' | 'before_conclusion' | null = null;  // NEW
+  private pendingFileIndexForTool: number = -1;
 
   public setCallbacks(callbacks: StreamProcessorCallbacks) {
     this.callbacks = callbacks;
@@ -37,18 +42,49 @@ export class StreamProcessor {
   private parse() {
     while (this.buffer.length > 0) {
       if (this.state === State.Idle) {
+        // Check for tool call fields first
+        const toolCallMatch = this.buffer.match(/.{1}"(tool_after_text|tool_after_file|tool_before_conclusion)"\s*:\s*\{/);
+        if (toolCallMatch) {
+          const position = toolCallMatch[1];
+          this.toolCallPosition = position.replace('tool_', '').replace('_', '_') as 'after_text' | 'after_file' | 'before_conclusion';
+          if (position === 'tool_after_file') {
+            this.pendingFileIndexForTool = this.fileIndex;
+          }
+          const toolStartIndex = toolCallMatch.index + toolCallMatch[0].length;
+          this.buffer = this.buffer.slice(toolStartIndex);
+          this.toolCallBuffer = '{';
+          this.state = State.ParsingToolCall;
+          continue;
+        }
+
         const keyMatch = this.buffer.match(/.{1}"(Text|FileName|FileVersion|FileCode|FileText|Conclusion)"\s*:\s*"/);
-        if (!keyMatch) return; // Not enough data to find a key, wait for more. 
+        if (!keyMatch) return;
 
         this.currentKey = keyMatch[1];
         const valueStartIndex = keyMatch.index + keyMatch[0].length;
         this.buffer = this.buffer.slice(valueStartIndex);
-        
+      
         if (this.currentKey === 'FileName') {
-            this.fileIndex++;
-            this.callbacks.onFileStart?.(this.fileIndex);
+          this.fileIndex++;
+          this.callbacks.onFileStart?.(this.fileIndex);
         }
         this.state = State.StreamingValue;
+      }
+
+      if (this.state === State.ParsingToolCall) {
+        let braceCount = 1;
+        let i = 0;
+        while (i < this.buffer.length && braceCount > 0) {
+          if (this.buffer[i] === '{') braceCount++;
+          else if (this.buffer[i] === '}') braceCount--;
+          this.toolCallBuffer += this.buffer[i];
+          i++;
+        }
+        this.buffer = this.buffer.slice(i);
+        if (braceCount === 0) {
+          this.parseToolCall();
+        }
+        continue;
       }
 
       if (this.state === State.StreamingValue) {
@@ -92,6 +128,28 @@ export class StreamProcessor {
           return;
         }
       }
+    }
+  }
+
+  private parseToolCall() {
+    try {
+      const parsed = JSON.parse(this.toolCallBuffer);
+      if (parsed && parsed.tool_name && parsed.query && this.toolCallPosition) {
+        this.callbacks.onToolCall?.(
+          { 
+            name: parsed.tool_name, 
+            query: parsed.query, 
+            position: this.toolCallPosition 
+          },
+          this.pendingFileIndexForTool >= 0 ? this.pendingFileIndexForTool : undefined
+        );
+      }
+      this.toolCallBuffer = '';
+      this.toolCallPosition = null;
+      this.pendingFileIndexForTool = -1;
+      this.state = State.Idle;
+    } catch (e) {
+      // Not complete yet, wait for more data
     }
   }
 

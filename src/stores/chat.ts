@@ -25,6 +25,8 @@ export interface ChatMessage {
   toolCalls?: {
     name: string;
     query: string;
+    position?: 'after_text' | 'after_file' | 'before_conclusion';  // NEW
+    fileIndex?: number;  // NEW
   }[];
 }
 

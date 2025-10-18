@@ -15,7 +15,7 @@
   import { fileStore } from './stores/file';
   import { api } from './lib/api';
   import { generateSessionId } from './lib/utils';
-  import { derived } from 'svelte/store';
+  import { derived, get } from 'svelte/store';
   import { StreamProcessor } from './lib/stream-processor';
 
   import Sidebar from './components/Sidebar.svelte';
@@ -285,6 +285,14 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
         },
         onFileTextChunk: (chunk, fileIndex) => chatStore.appendCodeModeFileText(messageId, fileIndex, chunk),
         onConclusionChunk: (chunk) => chatStore.appendCodeModeConclusion(messageId, chunk),
+        onToolCall: (toolData, fileIndex) => {  // NEW CALLBACK
+          chatStore.addToolCall(messageId, {
+            name: toolData.name,
+            query: toolData.query,
+            position: toolData.position,
+            fileIndex: fileIndex
+          });
+        },
         onComplete: () => {
           artifactStore.finishStreaming();
         }
@@ -304,32 +312,50 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
 
       let chunk = data.token;
 
-      if (!isParsingJson && chunk.includes('{')) {
-        const jsonStartIndex = chunk.indexOf('{');
-        const textPart = chunk.substring(0, jsonStartIndex);
-        if (textPart) {
-          accumulatedContent += textPart;
-        }
-        isParsingJson = true;
-        jsonBuffer = chunk.substring(jsonStartIndex);
-      } else if (isParsingJson) {
+      // State machine for detecting '{"tool_call":'
+      if (!isParsingJson) {
         jsonBuffer += chunk;
-      }
-       else {
-        accumulatedContent += chunk;
-      }
-
-      if (isParsingJson) {
+        
+        // Check if we have the complete tool call pattern
+        const toolCallPattern = '{"tool_call":';
+        const toolCallIndex = jsonBuffer.indexOf(toolCallPattern);
+        
+        if (toolCallIndex !== -1) {
+          // Found the start of a tool call
+          const textBeforeToolCall = jsonBuffer.substring(0, toolCallIndex);
+          accumulatedContent += textBeforeToolCall;
+          
+          // Start parsing the JSON object
+          isParsingJson = true;
+          jsonBuffer = jsonBuffer.substring(toolCallIndex); // Keep from '{"tool_call":' onwards
+        } else if (jsonBuffer.length > toolCallPattern.length) {
+          // We've accumulated enough to know there's no tool call starting here
+          // Keep only the last few chars in case pattern spans chunks
+          const keepLength = toolCallPattern.length - 1;
+          const releaseContent = jsonBuffer.substring(0, jsonBuffer.length - keepLength);
+          accumulatedContent += releaseContent;
+          jsonBuffer = jsonBuffer.substring(jsonBuffer.length - keepLength);
+        }
+      } else {
+        // We're parsing a potential JSON object
+        jsonBuffer += chunk;
+        
         try {
           const parsed = JSON.parse(jsonBuffer);
           if (parsed && parsed.tool_call === 'search_web' && parsed.query) {
             chatStore.addToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
             accumulatedContent += '<--tool-call-->';
+            isParsingJson = false;
+            jsonBuffer = '';
           }
-          isParsingJson = false;
-          jsonBuffer = '';
         } catch (e) {
-          // JSON not complete yet, wait for more tokens
+          // JSON not complete yet, continue accumulating
+          // Safety: if buffer gets too large, it's not a tool call
+          if (jsonBuffer.length > 500) {
+            accumulatedContent += jsonBuffer;
+            jsonBuffer = '';
+            isParsingJson = false;
+          }
         }
       }
 
@@ -341,6 +367,13 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
       streamEnded = true;
 
       streamProcessor?.close();
+
+      // CRITICAL FIX: Flush any remaining content in jsonBuffer
+      if (jsonBuffer.length > 0) {
+        accumulatedContent += jsonBuffer;
+        jsonBuffer = '';
+        isParsingJson = false;
+      }
 
       const tokenCount = accumulatedContent.split(/\s+/).filter(Boolean).length;
       chatStore.updateStreamingMessage(messageId, accumulatedContent);

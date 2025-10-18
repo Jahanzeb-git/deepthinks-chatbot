@@ -60,3 +60,17 @@ button:focus-visible {
     --reasoning-border: hsl(220, 13%, 25%);
   }
 }
+
+/* Highlight.js Theme - VS Code Dark */
+ @import 'highlight.js/styles/vs2015.css';
+
+/* Override for light theme */
+:root {
+  --hljs-bg: #f6f8fa;
+  --hljs-color: #24292e;
+}
+
+[data-theme="light"] .hljs {
+  background: var(--hljs-bg) !important;
+  color: var(--hljs-color) !important;
+}

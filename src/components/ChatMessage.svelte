@@ -8,6 +8,77 @@
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
   import FileCard from './shared/FileCard.svelte';
+  import CodeBlock from './shared/CodeBlock.svelte';
+
+function enhanceContent(node: HTMLElement) {
+  let mounted = false;
+
+  const enhance = () => {
+    // Handle code blocks
+    const codeBlocks = node.querySelectorAll('.code-block:not([data-enhanced])');
+    codeBlocks.forEach((block) => {
+      const lang = block.getAttribute('data-language') || '';
+      const code = block.getAttribute('data-code') || '';
+      
+      // Decode HTML entities
+      const decodedCode = code
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+      
+      // Create a wrapper div
+      const wrapper = document.createElement('div');
+      wrapper.className = 'code-block-wrapper';
+      
+      // Replace the placeholder with wrapper
+      block.parentNode?.replaceChild(wrapper, block);
+      
+      // Dynamically import and mount CodeBlock component
+      import('./shared/CodeBlock.svelte').then(({ default: CodeBlock }) => {
+        new CodeBlock({
+          target: wrapper,
+          props: { code: decodedCode, language: lang, inline: false }
+        });
+      });
+      
+      block.setAttribute('data-enhanced', 'true');
+    });
+  };
+
+  // Initial enhancement
+  setTimeout(enhance, 0);
+
+  // Watch for new content during streaming
+  const observer = new MutationObserver((mutations) => {
+    let shouldEnhance = false;
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Check if any added nodes contain code blocks
+        mutation.addedNodes.forEach(node => {
+          if (node instanceof HTMLElement) {
+            if (node.classList?.contains('code-block') || 
+                node.querySelector?.('.code-block')) {
+              shouldEnhance = true;
+            }
+          }
+        });
+      }
+    }
+    if (shouldEnhance) {
+      setTimeout(enhance, 50); // Small delay to let DOM settle
+    }
+  });
+
+  observer.observe(node, { childList: true, subtree: true });
+
+  return {
+    destroy() {
+      observer.disconnect();
+    }
+  };
+}
 
   interface FileMetadata {
     id: string;
@@ -115,6 +186,10 @@
     ? message.tokenCount
     : message?.content.split(/\s+/).filter(Boolean).length;
 
+  $: codeModeToolCalls = message?.mode === 'code' && message?.toolCalls 
+    ? message.toolCalls.filter(tc => tc.position)
+    : [];
+  
   function handleCopy() {
     const contentToCopy = message.mode === 'code' && message.codeModeContent 
       ? JSON.stringify(message.codeModeContent, null, 2) 
@@ -241,10 +316,24 @@
   {:else} <!-- This is for message.type === 'ai' -->
     <div class="message-content">
       {#if message.mode === 'code'}
-        <div class="code-message" use:renderMath>
-          {#each codeBlocks as block (block.id)}
-            {#if block.type === 'text' || block.type === 'conclusion'}
+        <div class="code-message" use:renderMath use:enhanceContent>
+          {#each codeBlocks as block, blockIdx (block.id)}
+            {#if block.type === 'text'}
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
+        
+              <!-- Tool call after text -->
+              {#each codeModeToolCalls.filter(tc => tc.position === 'after_text') as toolCall}
+                <div class="tool-call-container">
+                  <div class="tool-call-icon">
+                    <Search size={16} />
+                  </div>
+                  <div class="tool-call-info">
+                    <span class="tool-call-name">Searching the web...</span>
+                    <span class="tool-call-query">'{toolCall.query}'</span>
+                  </div>
+                </div>
+              {/each}
+        
             {:else if block.type === 'file' && block.file}
               <div class="file-block">
                 {#if block.file && block.file.fileName}
@@ -259,12 +348,41 @@
                 {#if block.file.fileText}
                   <div class="markdown-content file-text">{@html renderMarkdown(block.file.fileText)}</div>
                 {/if}
+          
+                <!-- Tool call after this specific file -->
+                {#each codeModeToolCalls.filter(tc => tc.position === 'after_file' && tc.fileIndex === blockIdx - 1) as toolCall}
+                  <div class="tool-call-container">
+                    <div class="tool-call-icon">
+                      <Search size={16} />
+                    </div>
+                    <div class="tool-call-info">
+                      <span class="tool-call-name">Searching the web...</span>
+                      <span class="tool-call-query">'{toolCall.query}'</span>
+                    </div>
+                  </div>
+                {/each}
               </div>
+        
+            {:else if block.type === 'conclusion'}
+              <!-- Tool call before conclusion -->
+              {#each codeModeToolCalls.filter(tc => tc.position === 'before_conclusion') as toolCall}
+                <div class="tool-call-container">
+                  <div class="tool-call-icon">
+                    <Search size={16} />
+                  </div>
+                  <div class="tool-call-info">
+                    <span class="tool-call-name">Searching the web...</span>
+                    <span class="tool-call-query">'{toolCall.query}'</span>
+                  </div>
+                </div>
+              {/each}
+        
+              <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
             {/if}
           {/each}
         </div>
       {:else}
-        <div class="ai-message" use:renderMath>
+        <div class="ai-message" use:renderMath use:enhanceContent>
           {#each contentParts as part, i}
             {@html renderMarkdown(part)}
             
