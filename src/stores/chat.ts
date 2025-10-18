@@ -276,7 +276,9 @@ function createChatStore() {
         try {
           // First, try to parse as a full JSON object (for code mode)
           const parsed = JSON.parse(msg.response);
-          if (parsed && typeof parsed === 'object' && ('Files' in parsed || 'Conclusion' in parsed)) {
+          if (parsed && typeof parsed === 'object' && 
+              ('Files' in parsed || 'Conclusion' in parsed || 'Text' in parsed)) {
+            // This is code mode content
             mode = 'code';
             codeModeContent = parsed;
             // For code mode, the raw content is the stringified JSON

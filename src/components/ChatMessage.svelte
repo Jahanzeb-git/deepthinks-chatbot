@@ -11,14 +11,25 @@
   import CodeBlock from './shared/CodeBlock.svelte';
 
 function enhanceContent(node: HTMLElement) {
-  let mounted = false;
+  const processedBlocks = new WeakSet<Element>();
+  let processingTimeout: number | null = null;
 
   const enhance = () => {
     // Handle code blocks
-    const codeBlocks = node.querySelectorAll('.code-block:not([data-enhanced])');
+    const codeBlocks = node.querySelectorAll('.code-block');
+    
     codeBlocks.forEach((block) => {
+      // Skip if already processed
+      if (processedBlocks.has(block)) return;
+      
       const lang = block.getAttribute('data-language') || '';
       const code = block.getAttribute('data-code') || '';
+      
+      // Skip if code is empty or incomplete (less than 3 chars)
+      if (!code || code.length < 3) return;
+      
+      // Mark as processed BEFORE creating component
+      processedBlocks.add(block);
       
       // Decode HTML entities
       const decodedCode = code
@@ -42,32 +53,52 @@ function enhanceContent(node: HTMLElement) {
           props: { code: decodedCode, language: lang, inline: false }
         });
       });
-      
-      block.setAttribute('data-enhanced', 'true');
     });
   };
 
-  // Initial enhancement
+  // Initial enhancement with small delay
   setTimeout(enhance, 0);
+
+  // Debounced enhancement for streaming updates
+  const debouncedEnhance = () => {
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+    }
+    processingTimeout = window.setTimeout(() => {
+      enhance();
+      processingTimeout = null;
+    }, 150); // Wait 150ms after last mutation
+  };
 
   // Watch for new content during streaming
   const observer = new MutationObserver((mutations) => {
-    let shouldEnhance = false;
+    let hasNewCodeBlock = false;
+    
     for (const mutation of mutations) {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        // Check if any added nodes contain code blocks
+      if (mutation.type === 'childList') {
         mutation.addedNodes.forEach(node => {
           if (node instanceof HTMLElement) {
-            if (node.classList?.contains('code-block') || 
-                node.querySelector?.('.code-block')) {
-              shouldEnhance = true;
+            // Check if this specific node is a code block we haven't seen
+            if (node.classList?.contains('code-block') && !processedBlocks.has(node)) {
+              hasNewCodeBlock = true;
+            }
+            // Check children
+            const codeBlocks = node.querySelectorAll?.('.code-block');
+            if (codeBlocks) {
+              codeBlocks.forEach(cb => {
+                if (!processedBlocks.has(cb)) {
+                  hasNewCodeBlock = true;
+                }
+              });
             }
           }
         });
       }
     }
-    if (shouldEnhance) {
-      setTimeout(enhance, 50); // Small delay to let DOM settle
+    
+    // Only enhance if we found a new code block we haven't processed
+    if (hasNewCodeBlock) {
+      debouncedEnhance();
     }
   });
 
@@ -75,6 +106,9 @@ function enhanceContent(node: HTMLElement) {
 
   return {
     destroy() {
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+      }
       observer.disconnect();
     }
   };
@@ -172,6 +206,10 @@ function enhanceContent(node: HTMLElement) {
           newBlocks.push({ id: idCounter++, type: 'conclusion', content: content.Conclusion });
         }
         codeBlocks = newBlocks;
+      } else if (message.mode === 'code' && !message.codeModeContent) {
+        // Handle case where mode is 'code' but codeModeContent is missing
+        // This can happen during streaming before JSON is complete
+        codeBlocks = [];
       }
     }
   }
