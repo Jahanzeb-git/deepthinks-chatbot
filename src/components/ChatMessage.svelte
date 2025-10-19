@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount, createEventDispatcher, onDestroy } from 'svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
+  import { SimpleCodeParser, type ContentSegment } from '../lib/simple-code-parser';
   import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import { chatStore } from '../stores/chat';
@@ -10,109 +11,10 @@
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
 
-function enhanceContent(node: HTMLElement) {
-  const processedBlocks = new WeakSet<Element>();
-  let processingTimeout: number | null = null;
-
-  const enhance = () => {
-    // Handle code blocks
-    const codeBlocks = node.querySelectorAll('.code-block');
-    
-    codeBlocks.forEach((block) => {
-      // Skip if already processed
-      if (processedBlocks.has(block)) return;
-      
-      const lang = block.getAttribute('data-language') || '';
-      const code = block.getAttribute('data-code') || '';
-      
-      // Skip if code is empty or incomplete (less than 3 chars)
-      if (!code || code.length < 3) return;
-      
-      // Mark as processed BEFORE creating component
-      processedBlocks.add(block);
-      
-      // Decode HTML entities
-      const decodedCode = code
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&');
-      
-      // Create a wrapper div
-      const wrapper = document.createElement('div');
-      wrapper.className = 'code-block-wrapper';
-      
-      // Replace the placeholder with wrapper
-      block.parentNode?.replaceChild(wrapper, block);
-      
-      // Dynamically import and mount CodeBlock component
-      import('./shared/CodeBlock.svelte').then(({ default: CodeBlock }) => {
-        new CodeBlock({
-          target: wrapper,
-          props: { code: decodedCode, language: lang, inline: false }
-        });
-      });
-    });
-  };
-
-  // Initial enhancement with small delay
-  setTimeout(enhance, 0);
-
-  // Debounced enhancement for streaming updates
-  const debouncedEnhance = () => {
-    if (processingTimeout) {
-      clearTimeout(processingTimeout);
-    }
-    processingTimeout = window.setTimeout(() => {
-      enhance();
-      processingTimeout = null;
-    }, 150); // Wait 150ms after last mutation
-  };
-
-  // Watch for new content during streaming
-  const observer = new MutationObserver((mutations) => {
-    let hasNewCodeBlock = false;
-    
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach(node => {
-          if (node instanceof HTMLElement) {
-            // Check if this specific node is a code block we haven't seen
-            if (node.classList?.contains('code-block') && !processedBlocks.has(node)) {
-              hasNewCodeBlock = true;
-            }
-            // Check children
-            const codeBlocks = node.querySelectorAll?.('.code-block');
-            if (codeBlocks) {
-              codeBlocks.forEach(cb => {
-                if (!processedBlocks.has(cb)) {
-                  hasNewCodeBlock = true;
-                }
-              });
-            }
-          }
-        });
-      }
-    }
-    
-    // Only enhance if we found a new code block we haven't processed
-    if (hasNewCodeBlock) {
-      debouncedEnhance();
-    }
-  });
-
-  observer.observe(node, { childList: true, subtree: true });
-
-  return {
-    destroy() {
-      if (processingTimeout) {
-        clearTimeout(processingTimeout);
-      }
-      observer.disconnect();
-    }
-  };
-}
+  function enhanceContent(node: HTMLElement) {
+    // Only for math rendering now - code blocks are handled separately
+    return renderMath(node);
+  }
 
   interface FileMetadata {
     id: string;
@@ -145,6 +47,10 @@ function enhanceContent(node: HTMLElement) {
   let mounted = false;
   let copied = false;
 
+  // Parser instance - persists across updates
+  let parser: SimpleCodeParser | null = null;
+  let segments: ContentSegment[] = [];
+
   $: userPromptText = (() => {
     if (message?.type !== 'user') return '';
     try {
@@ -156,6 +62,33 @@ function enhanceContent(node: HTMLElement) {
   })();
 
   $: contentParts = message ? message.content.split('<--tool-call-->') : [''];
+
+  // Parse streaming content - key fix: only parse the LAST part (actively streaming)
+  $: if (message && message.type === 'ai' && message.mode !== 'code') {
+    // Initialize parser on first run
+    if (!parser) {
+      parser = new SimpleCodeParser();
+    }
+    
+    // Get the actively streaming part (last part after tool calls)
+    const currentPart = contentParts[contentParts.length - 1];
+    
+    // Parse it - parser maintains state and returns SAME array reference
+    segments = parser.parse(currentPart);
+    
+    // Reset parser when message is complete
+    if (!message.isStreaming) {
+      parser.reset();
+    }
+  }
+
+  // Cleanup
+  onDestroy(() => {
+    if (parser) {
+      parser.reset();
+      parser = null;
+    }
+  });
 
   const dispatch = createEventDispatcher<{
     regenerate: { messageId: string }
@@ -207,8 +140,6 @@ function enhanceContent(node: HTMLElement) {
         }
         codeBlocks = newBlocks;
       } else if (message.mode === 'code' && !message.codeModeContent) {
-        // Handle case where mode is 'code' but codeModeContent is missing
-        // This can happen during streaming before JSON is complete
         codeBlocks = [];
       }
     }
@@ -227,6 +158,23 @@ function enhanceContent(node: HTMLElement) {
   $: codeModeToolCalls = message?.mode === 'code' && message?.toolCalls 
     ? message.toolCalls.filter(tc => tc.position)
     : [];
+
+  $: if (message?.isStreaming && segments.length > 0) {
+    console.log('🔍 SEGMENTS:', segments);
+    console.log('🔍 Segment types:', segments.map(s => s.type));
+    console.log('🔍 Code segments:', segments.filter(s => s.type === 'code'));
+    const codeSegs = segments.filter(s => s.type === 'code');
+    if (codeSegs.length > 0) {
+      console.log('📦 CODE SEGMENT DETAILS:');
+      codeSegs.forEach((seg, i) => {
+        console.log(`  [${i}] Language: "${seg.language}"`);
+        console.log(`  [${i}] Content length: ${seg.content?.length || 0}`);
+        console.log(`  [${i}] First 100 chars: "${seg.content?.slice(0, 100)}"`);
+      });
+    }
+  }
+
+
   
   function handleCopy() {
     const contentToCopy = message.mode === 'code' && message.codeModeContent 
@@ -277,10 +225,8 @@ function enhanceContent(node: HTMLElement) {
       const url = URL.createObjectURL(blob);
 
       if (file.is_image || file.type.includes('pdf')) {
-        // Open in new tab
         window.open(url, '_blank');
       } else {
-        // Download file
         const a = document.createElement('a');
         a.href = url;
         a.download = file.original_name;
@@ -317,7 +263,6 @@ function enhanceContent(node: HTMLElement) {
       <User size={18} />
     </div>
     <div class="message-content">
-      <!-- File attachments above message -->
       {#if fileAttachments && Array.isArray(fileAttachments) && fileAttachments.length > 0}
         <div class="file-attachments">
           {#each fileAttachments as file}
@@ -351,15 +296,14 @@ function enhanceContent(node: HTMLElement) {
         <pre class="user-message-text">{userPromptText}</pre>
       </div>
     </div>
-  {:else} <!-- This is for message.type === 'ai' -->
+  {:else}
     <div class="message-content">
       {#if message.mode === 'code'}
-        <div class="code-message" use:renderMath use:enhanceContent>
+        <div class="code-message" use:enhanceContent>
           {#each codeBlocks as block, blockIdx (block.id)}
             {#if block.type === 'text'}
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
         
-              <!-- Tool call after text -->
               {#each codeModeToolCalls.filter(tc => tc.position === 'after_text') as toolCall}
                 <div class="tool-call-container">
                   <div class="tool-call-icon">
@@ -387,7 +331,6 @@ function enhanceContent(node: HTMLElement) {
                   <div class="markdown-content file-text">{@html renderMarkdown(block.file.fileText)}</div>
                 {/if}
           
-                <!-- Tool call after this specific file -->
                 {#each codeModeToolCalls.filter(tc => tc.position === 'after_file' && tc.fileIndex === blockIdx - 1) as toolCall}
                   <div class="tool-call-container">
                     <div class="tool-call-icon">
@@ -402,7 +345,6 @@ function enhanceContent(node: HTMLElement) {
               </div>
         
             {:else if block.type === 'conclusion'}
-              <!-- Tool call before conclusion -->
               {#each codeModeToolCalls.filter(tc => tc.position === 'before_conclusion') as toolCall}
                 <div class="tool-call-container">
                   <div class="tool-call-icon">
@@ -420,20 +362,55 @@ function enhanceContent(node: HTMLElement) {
           {/each}
         </div>
       {:else}
-        <div class="ai-message" use:renderMath use:enhanceContent>
-          {#each contentParts as part, i}
-            {@html renderMarkdown(part)}
-            
-            {#if i < contentParts.length - 1 && message.toolCalls && message.toolCalls[i]}
-              <div class="tool-call-container">
-                <div class="tool-call-icon">
-                  <Search size={16} />
+        <!-- DEFAULT MODE: Segment-based rendering with stable CodeBlock components -->
+        <div class="ai-message" use:enhanceContent>
+          {#each contentParts as part, partIdx}
+            {#if partIdx < contentParts.length - 1}
+              <!-- Completed parts before tool calls - use standard markdown -->
+              {@html renderMarkdown(part)}
+              
+              {#if message.toolCalls && message.toolCalls[partIdx]}
+                <div class="tool-call-container">
+                  <div class="tool-call-icon">
+                    <Search size={16} />
+                  </div>
+                  <div class="tool-call-info">
+                    <span class="tool-call-name">Searching the web...</span>
+                    <span class="tool-call-query">'{message.toolCalls[partIdx].query}'</span>
+                  </div>
                 </div>
-                <div class="tool-call-info">
-                  <span class="tool-call-name">Searching the web...</span>
-                  <span class="tool-call-query">'{message.toolCalls[i].query}'</span>
+              {/if}
+            {:else}
+              <!-- Current streaming part - use segment-based rendering -->
+              {#each segments as segment (segment.id)}
+                {#if segment.type === 'text'}
+                  <span class="text-segment">{@html renderMarkdown(segment.content)}</span>
+                {:else if segment.type === 'code'}
+                  <CodeBlock 
+                    code={segment.content} 
+                    language={segment.language || ''} 
+                    inline={false}
+                  />
+                {:else if segment.type === 'inline-code'}
+                  <CodeBlock 
+                    code={segment.content} 
+                    language=""
+                    inline={true}
+                  />
+                {/if}
+              {/each}
+              
+              {#if message.toolCalls && message.toolCalls[partIdx]}
+                <div class="tool-call-container">
+                  <div class="tool-call-icon">
+                    <Search size={16} />
+                  </div>
+                  <div class="tool-call-info">
+                    <span class="tool-call-name">Searching the web...</span>
+                    <span class="tool-call-query">'{message.toolCalls[partIdx].query}'</span>
+                  </div>
                 </div>
-              </div>
+              {/if}
             {/if}
           {/each}
         </div>
@@ -485,6 +462,7 @@ function enhanceContent(node: HTMLElement) {
   .file-block { margin: 0.5rem 0; }
   .file-card-button { background: none; border: none; padding: 0; cursor: pointer; display: block; width: 100%; text-align: left; }
   .file-text { padding: 0.5rem; margin-top: 0.5rem; background: var(--surface-color); border-radius: 8px; }
+  .text-segment { display: inline; }
   @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
   .file-attachments {

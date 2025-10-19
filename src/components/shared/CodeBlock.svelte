@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Copy, Check } from 'lucide-svelte';
   import hljs from 'highlight.js';
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
 
   export let code: string;
   export let language: string = '';
@@ -10,6 +10,7 @@
   let copied = false;
   let codeElement: HTMLElement;
   let displayLanguage = language || 'plaintext';
+  let lastHighlightedCode = '';
 
   // Map common language aliases
   const languageMap: Record<string, string> = {
@@ -32,23 +33,38 @@
     setTimeout(() => (copied = false), 2000);
   }
 
-  onMount(() => {
-    if (codeElement && !inline) {
-      try {
-        if (normalizedLang && normalizedLang !== 'plaintext') {
-          const highlighted = hljs.highlight(code, { language: normalizedLang, ignoreIllegals: true });
-          codeElement.innerHTML = highlighted.value;
-        } else {
-          const autoDetected = hljs.highlightAuto(code);
-          codeElement.innerHTML = autoDetected.value;
-          if (autoDetected.language) {
-            displayLanguage = autoDetected.language;
-          }
+  function highlightCode() {
+    if (!codeElement || inline) return;
+    
+    // Skip if code hasn't changed
+    if (code === lastHighlightedCode) return;
+    lastHighlightedCode = code;
+    
+    try {
+      if (normalizedLang && normalizedLang !== 'plaintext') {
+        const highlighted = hljs.highlight(code, { language: normalizedLang, ignoreIllegals: true });
+        codeElement.innerHTML = highlighted.value;
+      } else {
+        const autoDetected = hljs.highlightAuto(code);
+        codeElement.innerHTML = autoDetected.value;
+        if (autoDetected.language) {
+          displayLanguage = autoDetected.language;
         }
-      } catch (e) {
-        codeElement.textContent = code;
       }
+    } catch (e) {
+      console.error('Highlight error:', e);
+      codeElement.textContent = code;
     }
+  }
+
+  // Highlight on mount
+  onMount(() => {
+    highlightCode();
+  });
+
+  // Re-highlight when code changes (for streaming)
+  afterUpdate(() => {
+    highlightCode();
   });
 </script>
 
