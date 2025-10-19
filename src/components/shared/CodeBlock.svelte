@@ -88,6 +88,7 @@
 
 <style>
   .inline-code {
+    display: inline; /* CRITICAL FIX */
     background: var(--surface-color);
     color: var(--primary-color);
     padding: 0.15rem 0.4rem;
@@ -95,6 +96,7 @@
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
     border: 1px solid var(--border-color);
+    white-space: nowrap; /* Prevents breaking inline code */
   }
 
   .code-block-container {

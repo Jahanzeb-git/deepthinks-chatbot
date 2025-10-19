@@ -384,20 +384,18 @@
               <!-- Current streaming part - use segment-based rendering -->
               {#each segments as segment (segment.id)}
                 {#if segment.type === 'text'}
-                  <span class="text-segment">{@html renderMarkdown(segment.content)}</span>
+                  {@html renderMarkdown(segment.content)}
                 {:else if segment.type === 'code'}
                   <CodeBlock 
                     code={segment.content} 
                     language={segment.language || ''} 
                     inline={false}
                   />
-                {:else if segment.type === 'inline-code'}
-                  <CodeBlock 
+                {:else if segment.type === 'inline-code'}<CodeBlock
                     code={segment.content} 
                     language=""
                     inline={true}
-                  />
-                {/if}
+                  />{/if}
               {/each}
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
@@ -462,7 +460,6 @@
   .file-block { margin: 0.5rem 0; }
   .file-card-button { background: none; border: none; padding: 0; cursor: pointer; display: block; width: 100%; text-align: left; }
   .file-text { padding: 0.5rem; margin-top: 0.5rem; background: var(--surface-color); border-radius: 8px; }
-  .text-segment { display: inline; }
   @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
   .file-attachments {
@@ -567,4 +564,15 @@
     color: var(--text-muted);
     font-family: monospace;
   }
+
+  .ai-message :global(p) {
+    display: inline;
+    margin: 0;
+  }
+
+  .ai-message :global(p:has(+ p)) {
+    display: block;
+    margin-bottom: 1rem;
+  }
+
 </style>
