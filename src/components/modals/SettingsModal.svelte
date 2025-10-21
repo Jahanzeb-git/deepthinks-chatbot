@@ -265,7 +265,7 @@
 	}
 
 	function selectAllFiles() {
-  	selectedFiles = filesData.map(f => f.stored_name);
+  	selectedFiles = filesData.map(f => f.b2_key);
 	}
 
 	function deselectAllFiles() {
@@ -524,12 +524,12 @@
                       <div class="files-list">
                         {#each filesData as file (file.id)}
                           {@const fileIconData = getFileIcon(file.mime_type, file.original_name)}
-                          <div class="file-item" class:selected={selectedFiles.includes(file.stored_name)}>
+                          <div class="file-item" class:selected={selectedFiles.includes(file.b2_key)}>
                             <input 
                               type="checkbox" 
                               class="file-checkbox"
-                              checked={selectedFiles.includes(file.stored_name)}
-                              on:change={() => toggleFileSelection(file.stored_name)}
+                              checked={selectedFiles.includes(file.b2_key)}
+                              on:change={() => toggleFileSelection(file.b2_key)}
                             />
                             <div class="file-item-icon" style="background-color: {fileIconData.color}15; color: {fileIconData.color};">
                               <svelte:component this={fileIconData.icon} size={20} />
@@ -549,7 +549,7 @@
                             <button 
                               class="file-item-delete"
                               on:click={() => {
-                                selectedFiles = [file.stored_name];
+                                selectedFiles = [file.b2_key];
                                 showDeleteFilesConfirmation = true;
                               }}
                               title="Delete file"

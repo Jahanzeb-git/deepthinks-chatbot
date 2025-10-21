@@ -120,7 +120,7 @@
           // Update stored names
           if (response.files && Array.isArray(response.files)) {
             response.files.forEach((uploadedFile: any, index: number) => {
-              fileStore.updateFileAfterUpload(index, uploadedFile.stored_name);
+              fileStore.updateFileAfterUpload(index, uploadedFile.b2_key);
             });
           }
 

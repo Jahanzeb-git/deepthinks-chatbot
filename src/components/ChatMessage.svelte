@@ -19,7 +19,7 @@
   interface FileMetadata {
     id: string;
     original_name: string;
-    stored_name: string;
+    b2_key: string;
     size: number;
     type: string;
     uploaded_at: string;
@@ -209,7 +209,7 @@
 
     try {
       const response = await fetch(
-        `https://chatbot-backend-rtue.onrender.com/files/${sessionId}/${file.stored_name}`,
+        `https://chatbot-backend-rtue.onrender.com/files/${sessionId}/${file.b2_key}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

@@ -446,7 +446,7 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
       const fileMetadata = files.map(f => ({
         id: f.storedName, // Use the unique stored name for the ID
         original_name: f.originalName,
-        stored_name: f.storedName,
+        b2_key: f.storedName,
         size: f.size,
         type: f.type,
         is_image: f.isImage,

@@ -247,7 +247,7 @@ function createChatStore() {
           const fileMetadata = msg.files.map(f => ({
             id: f.id.toString(),
             original_name: f.original_name,
-            stored_name: f.stored_name,
+            b2_key: f.b2_key,
             size: f.size,
             type: f.mime_type, // Map mime_type to type
             is_image: Boolean(f.is_image), // Convert 0/1 to boolean
