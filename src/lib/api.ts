@@ -2,7 +2,7 @@ import { authStore } from '../stores/auth';
 import { get } from 'svelte/store';
 import type { UserSettings } from '../stores/settings'; // Import the shared type
 
-const BASE_URL = 'https://jahanzebahmed25.pythonanywhere.com';
+const BASE_URL = 'https://chatbot-backend-rtue.onrender.com';
 
 class APIError extends Error {
   constructor(public status: number, message: string) {

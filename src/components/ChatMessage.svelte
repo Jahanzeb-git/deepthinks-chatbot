@@ -209,7 +209,7 @@
 
     try {
       const response = await fetch(
-        `https://jahanzebahmed25.pythonanywhere.com/files/${sessionId}/${file.stored_name}`,
+        `https://chatbot-backend-rtue.onrender.com/files/${sessionId}/${file.stored_name}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
