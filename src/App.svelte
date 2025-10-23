@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tick } from 'svelte';
   import { authStore } from './stores/auth';
   import { sessionStore } from './stores/session';
   import { themeStore } from './stores/theme';
@@ -245,12 +246,59 @@
     historyStore.setHistory([]);
     unauthenticatedSessionId = generateSessionId();
   }
+
+async function pollSearchWebUrls(messageId: string, sessionNumber: number) {
+  let pollCount = 0;
+  const maxPolls = 120;
+  const pollInterval = setInterval(async () => {
+    try {
+      pollCount++;
+      const response = await api.getSearchWebUrls(sessionNumber, true);
+      
+      if (response && response.calls && Array.isArray(response.calls)) {
+
+        const call = response.calls[0]; // There's only one call object
+        if (call && call.urls && Array.isArray(call.urls)) {
+          // Find the current message
+          const currentMessage = $chatStore.messages.find(m => m.id === messageId);
+          
+          if (currentMessage && currentMessage.toolCalls) {
+            // Update the LAST tool call (the active one)
+            const lastToolCallIndex = currentMessage.toolCalls.length - 1;
+            if (lastToolCallIndex >= 0) {
+              chatStore.updateToolCallUrls(messageId, lastToolCallIndex, call.urls);
+            }
+          }
+        }
+      }
+      
+      // Stop polling if message is no longer streaming
+      const currentMessage = $chatStore.messages.find(m => m.id === messageId);
+      if (!currentMessage?.isStreaming || pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+      }
+    } catch (error) {
+      // Silently continue - backend might not have data yet
+      if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+      } 
+    }
+  }, 1000);
+  
+  return pollInterval;
+}
   
 async function submitPrompt(message: string, reason: 'default' | 'reason' | 'code' = 'default') {
     abortController = new AbortController();
     
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
     const messageId = chatStore.startAIResponse(model, reason);
+
+    // Start polling for search URLs if authenticated...
+    let searchPollInterval: any = null;
+    if ($authStore.isAuthenticated && $sessionStore.currentSession) {
+      searchPollInterval = await pollSearchWebUrls(messageId, $sessionStore.currentSession);
+    }
 
     let accumulatedContent = '';
     let firstTokenReceived = false;
@@ -365,6 +413,11 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     const onEnd = async () => {
       if (streamEnded) return;
       streamEnded = true;
+
+      // Stop polling
+      if (searchPollInterval) {
+        clearInterval(searchPollInterval);
+      }
 
       streamProcessor?.close();
 

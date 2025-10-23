@@ -25,8 +25,10 @@ export interface ChatMessage {
   toolCalls?: {
     name: string;
     query: string;
-    position?: 'after_text' | 'after_file' | 'before_conclusion';  // NEW
-    fileIndex?: number;  // NEW
+    position?: 'after_text' | 'after_file' | 'before_conclusion';
+    fileIndex?: number; 
+    urls?: Array<{ title: string; url: string }>; 
+    isLoading?: boolean; 
   }[];
 }
 
@@ -152,14 +154,32 @@ function createChatStore() {
       });
     },
 
-    addToolCall: (messageId: string, toolCall: { name: string; query: string; }) => {
+    addToolCall: (messageId: string, toolCall: { name: string; query: string; position?: string; fileIndex?: number  }) => {
       update(state => ({
         ...state,
         messages: state.messages.map(msg => 
           msg.id === messageId 
-            ? { ...msg, toolCalls: [...(msg.toolCalls || []), toolCall] }
+            ? { ...msg, toolCalls: [...(msg.toolCalls || []), {...toolCall, isLoading: true, urls: [] }] }
             : msg
         )
+      }));
+    },
+
+    updateToolCallUrls: (messageId: string, toolCallIndex: number, urls: Array<{ title: string; url: string }>) => {
+      update(state => ({
+        ...state,
+        messages: state.messages.map(msg => {
+          if (msg.id === messageId && msg.toolCalls && msg.toolCalls[toolCallIndex]) {
+            const updatedToolCalls = [...msg.toolCalls];
+            updatedToolCalls[toolCallIndex] = {
+              ...updatedToolCalls[toolCallIndex],
+              urls,
+              isLoading: false
+            };
+            return { ...msg, toolCalls: updatedToolCalls };
+          }
+          return msg;
+        })
       }));
     },
 
@@ -273,19 +293,53 @@ function createChatStore() {
         let content = msg.response;
         let toolCalls: ChatMessage['toolCalls'] = [];
 
+        // STEP 1: First check if this is code mode
         try {
-          // First, try to parse as a full JSON object (for code mode)
           const parsed = JSON.parse(msg.response);
           if (parsed && typeof parsed === 'object' && 
-              ('Files' in parsed || 'Conclusion' in parsed || 'Text' in parsed)) {
+            ('Files' in parsed || 'Conclusion' in parsed || 'Text' in parsed)) {
             // This is code mode content
             mode = 'code';
             codeModeContent = parsed;
-            // For code mode, the raw content is the stringified JSON
             content = JSON.stringify(parsed, null, 2);
           }
         } catch (e) {
-          // If parsing fails, it's not a code-mode object. Check for embedded tool calls.
+          // Not code mode, continue
+        }
+
+        // STEP 2: Process search_web_calls ONLY if NOT code mode
+        if (mode !== 'code' && msg.search_web_calls && Array.isArray(msg.search_web_calls) && msg.search_web_calls.length > 0) {
+          // Sort by sequence to ensure correct order
+          const sortedCalls = msg.search_web_calls.sort((a: any, b: any) => a.sequence - b.sequence);
+  
+          sortedCalls.forEach((searchCall: any) => {
+            const urls = searchCall.urls?.map((u: any) => ({
+              title: u.title,
+              url: u.url
+            })) || [];
+    
+            toolCalls.push({
+              name: 'search_web',
+              query: searchCall.query,
+              urls,
+              isLoading: false
+            });
+          });
+  
+          // Split content by tool call markers if they exist
+          if (toolCalls.length > 0 && !content.includes('<--tool-call-->')) {
+            // If content doesn't have markers but we have tool calls,
+            // add them at appropriate positions (this is a fallback)
+            const parts = [content];
+            for (let i = 0; i < toolCalls.length - 1; i++) {
+              parts.push('');
+            }
+            content = parts.join('<--tool-call-->');
+          }
+        }
+
+        // STEP 3: Handle embedded tool calls (old format) ONLY if mode is still 'default'
+        if (mode === 'default') {
           const toolCallStartTag = '{"tool_call":';
           if (msg.response.includes(toolCallStartTag)) {
             const parts = [];
@@ -294,7 +348,7 @@ function createChatStore() {
 
             while (startIndex !== -1) {
               parts.push(remainingText.substring(0, startIndex));
-              
+      
               let openBraces = 0;
               let endIndex = -1;
               for (let i = startIndex; i < remainingText.length; i++) {
@@ -314,7 +368,16 @@ function createChatStore() {
                 try {
                   const parsedTool = JSON.parse(jsonStr);
                   if (parsedTool.tool_call && parsedTool.query) {
-                    toolCalls.push({ name: parsedTool.tool_call, query: parsedTool.query });
+                    // Only add if not already in toolCalls (to avoid duplicates)
+                    const alreadyExists = toolCalls.some(tc => tc.query === parsedTool.query);
+                    if (!alreadyExists) {
+                      toolCalls.push({ 
+                        name: parsedTool.tool_call, 
+                        query: parsedTool.query,
+                        urls: [],
+                        isLoading: false
+                      });
+                    }
                     remainingText = remainingText.substring(endIndex);
                   } else {
                     parts.push(jsonStr);
@@ -334,7 +397,6 @@ function createChatStore() {
             parts.push(remainingText);
             content = parts.join('<--tool-call-->');
           }
-          // If no tool calls found, content remains msg.response (plain text)
         }
 
         chatMessages.push({
@@ -346,6 +408,7 @@ function createChatStore() {
           codeModeContent: codeModeContent,
           toolCalls: toolCalls
         });
+        
       });
       
       update(state => ({

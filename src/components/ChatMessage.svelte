@@ -8,6 +8,7 @@
   import { chatStore } from '../stores/chat';
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
+  import WebSearchUI from './shared/WebSearchUI.svelte';
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
 
@@ -305,15 +306,11 @@
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
         
               {#each codeModeToolCalls.filter(tc => tc.position === 'after_text') as toolCall}
-                <div class="tool-call-container">
-                  <div class="tool-call-icon">
-                    <Search size={16} />
-                  </div>
-                  <div class="tool-call-info">
-                    <span class="tool-call-name">Searching the web...</span>
-                    <span class="tool-call-query">'{toolCall.query}'</span>
-                  </div>
-                </div>
+                <WebSearchUI 
+                  query={toolCall.query}
+                  urls={toolCall.urls || []}
+                  isLoading={false}
+                />
               {/each}
         
             {:else if block.type === 'file' && block.file}
@@ -332,29 +329,21 @@
                 {/if}
           
                 {#each codeModeToolCalls.filter(tc => tc.position === 'after_file' && tc.fileIndex === blockIdx - 1) as toolCall}
-                  <div class="tool-call-container">
-                    <div class="tool-call-icon">
-                      <Search size={16} />
-                    </div>
-                    <div class="tool-call-info">
-                      <span class="tool-call-name">Searching the web...</span>
-                      <span class="tool-call-query">'{toolCall.query}'</span>
-                    </div>
-                  </div>
+                  <WebSearchUI 
+                    query={toolCall.query}
+                    urls={toolCall.urls || []}
+                    isLoading={false}
+                  />
                 {/each}
               </div>
         
             {:else if block.type === 'conclusion'}
               {#each codeModeToolCalls.filter(tc => tc.position === 'before_conclusion') as toolCall}
-                <div class="tool-call-container">
-                  <div class="tool-call-icon">
-                    <Search size={16} />
-                  </div>
-                  <div class="tool-call-info">
-                    <span class="tool-call-name">Searching the web...</span>
-                    <span class="tool-call-query">'{toolCall.query}'</span>
-                  </div>
-                </div>
+                <WebSearchUI 
+                  query={toolCall.query}
+                  urls={toolCall.urls || []}
+                  isLoading={false}
+                />
               {/each}
         
               <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
@@ -370,15 +359,11 @@
               {@html renderMarkdown(part)}
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
-                <div class="tool-call-container">
-                  <div class="tool-call-icon">
-                    <Search size={16} />
-                  </div>
-                  <div class="tool-call-info">
-                    <span class="tool-call-name">Searching the web...</span>
-                    <span class="tool-call-query">'{message.toolCalls[partIdx].query}'</span>
-                  </div>
-                </div>
+                <WebSearchUI 
+                  query={message.toolCalls[partIdx].query}
+                  urls={message.toolCalls[partIdx].urls || []}
+                  isLoading={message.toolCalls[partIdx].isLoading ?? true}
+                />
               {/if}
             {:else}
               <!-- Current streaming part - use segment-based rendering -->
@@ -399,15 +384,11 @@
               {/each}
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
-                <div class="tool-call-container">
-                  <div class="tool-call-icon">
-                    <Search size={16} />
-                  </div>
-                  <div class="tool-call-info">
-                    <span class="tool-call-name">Searching the web...</span>
-                    <span class="tool-call-query">'{message.toolCalls[partIdx].query}'</span>
-                  </div>
-                </div>
+                <WebSearchUI 
+                  query={message.toolCalls[partIdx].query}
+                  urls={message.toolCalls[partIdx].urls || []}
+                  isLoading={message.toolCalls[partIdx].isLoading ?? true}
+                />  
               {/if}
             {/if}
           {/each}
@@ -528,41 +509,6 @@
     height: 1px;
     margin: 0.9rem 0;
     pointer-events: none;
-  }
-
-  .tool-call-container {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 1rem;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    margin-bottom: 0.75rem;
-    max-width: max-content;
-  }
-
-  .tool-call-icon {
-    color: var(--primary-color);
-    flex-shrink: 0;
-  }
-
-  .tool-call-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-  }
-
-  .tool-call-name {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-color);
-  }
-
-  .tool-call-query {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-family: monospace;
   }
 
   .ai-message :global(p) {

@@ -318,4 +318,10 @@ export const api = {
       body: JSON.stringify(body)
     });
   },
+
+  // Search Web URLs
+  async getSearchWebUrls(sessionNumber: number, active: boolean = true) {
+    const params = new URLSearchParams({ active: active.toString() });
+    return makeRequest(`/search-web-urls/${sessionNumber}?${params.toString()}`);
+  },
 };

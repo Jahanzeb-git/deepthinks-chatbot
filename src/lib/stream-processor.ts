@@ -144,12 +144,13 @@ export class StreamProcessor {
           this.pendingFileIndexForTool >= 0 ? this.pendingFileIndexForTool : undefined
         );
       }
-      this.toolCallBuffer = '';
-      this.toolCallPosition = null;
-      this.pendingFileIndexForTool = -1;
-      this.state = State.Idle;
+        // Successfully parsed, reset state
+        this.toolCallBuffer = '';
+        this.toolCallPosition = null;
+        this.pendingFileIndexForTool = -1;
+        this.state = State.Idle;
     } catch (e) {
-      // Not complete yet, wait for more data
+        // not complete yet.
     }
   }
 
