@@ -11,6 +11,7 @@
   import WebSearchUI from './shared/WebSearchUI.svelte';
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
+  import { fly } from 'svelte/transition';
 
   function enhanceContent(node: HTMLElement) {
     // Only for math rendering now - code blocks are handled separately
@@ -30,6 +31,7 @@
   export let messageId: string;
   export let isLastAiMessage: boolean = false;
   export let isSharedView: boolean = false;
+
 
   $: message = $chatStore.messages.find(m => m.id === messageId);
   $: activeFileKey = $artifactStore.activeFileKey;
@@ -160,23 +162,6 @@
     ? message.toolCalls.filter(tc => tc.position)
     : [];
 
-  $: if (message?.isStreaming && segments.length > 0) {
-    console.log('🔍 SEGMENTS:', segments);
-    console.log('🔍 Segment types:', segments.map(s => s.type));
-    console.log('🔍 Code segments:', segments.filter(s => s.type === 'code'));
-    const codeSegs = segments.filter(s => s.type === 'code');
-    if (codeSegs.length > 0) {
-      console.log('📦 CODE SEGMENT DETAILS:');
-      codeSegs.forEach((seg, i) => {
-        console.log(`  [${i}] Language: "${seg.language}"`);
-        console.log(`  [${i}] Content length: ${seg.content?.length || 0}`);
-        console.log(`  [${i}] First 100 chars: "${seg.content?.slice(0, 100)}"`);
-      });
-    }
-  }
-
-
-  
   function handleCopy() {
     const contentToCopy = message.mode === 'code' && message.codeModeContent 
       ? JSON.stringify(message.codeModeContent, null, 2) 
@@ -417,6 +402,11 @@
         <span>Interrupted</span>
       </div>
     {/if}
+    {#if isLastAiMessage}
+      <div class="disclaimer-text" transition:fly="{{ y: 10, duration: 500 }}">
+        I dream of electric sheep... and sometimes get my facts mixed up. Please verify.
+      </div>
+    {/if}
   </div>
 {/if}
 {/if}
@@ -432,6 +422,7 @@
   .ai-message, .code-message { font-family: 'Nunito', sans-serif; line-height: 1.6; color: var(--text-color); word-wrap: break-word; max-width: 100%; text-align: left; }
   .message-actions { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
   .interrupted-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); margin-left: auto; font-style: italic; padding: 0.25rem 0.5rem; border-radius: 6px; background-color: var(--hover-color); }
+  .disclaimer-text { font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-left: auto; }
   .token-count { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.5rem; }
   .action-btn { background: none; border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease; }
   .action-btn:hover:not(:disabled) { background: var(--hover-color); color: var(--text-color); border-color: var(--primary-color); }

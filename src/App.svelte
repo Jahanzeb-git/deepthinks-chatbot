@@ -256,19 +256,22 @@ async function pollSearchWebUrls(messageId: string, sessionNumber: number) {
       const response = await api.getSearchWebUrls(sessionNumber, true);
       
       if (response && response.calls && Array.isArray(response.calls)) {
+        const currentMessage = $chatStore.messages.find(m => m.id === messageId);
 
-        const call = response.calls[0]; // There's only one call object
-        if (call && call.urls && Array.isArray(call.urls)) {
-          // Find the current message
-          const currentMessage = $chatStore.messages.find(m => m.id === messageId);
-          
-          if (currentMessage && currentMessage.toolCalls) {
-            // Update the LAST tool call (the active one)
-            const lastToolCallIndex = currentMessage.toolCalls.length - 1;
-            if (lastToolCallIndex >= 0) {
-              chatStore.updateToolCallUrls(messageId, lastToolCallIndex, call.urls);
+        if (currentMessage && currentMessage.toolCalls) {
+          // Match backend calls to frontend tool calls by query
+          response.calls.forEach((backendCall: any) => {
+            if (backendCall && backendCall.urls && Array.isArray(backendCall.urls)) {
+              // Find the tool call with matching query
+              const toolCallIndex = currentMessage.toolCalls.findIndex(
+                tc => tc.query === backendCall.query
+              );
+              
+              if (toolCallIndex >= 0) {
+                chatStore.updateToolCallUrls(messageId, toolCallIndex, backendCall.urls);
+              }
             }
-          }
+          });
         }
       }
       

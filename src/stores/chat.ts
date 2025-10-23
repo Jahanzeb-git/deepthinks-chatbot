@@ -307,29 +307,50 @@ function createChatStore() {
           // Not code mode, continue
         }
 
-        // STEP 2: Process search_web_calls ONLY if NOT code mode
-        if (mode !== 'code' && msg.search_web_calls && Array.isArray(msg.search_web_calls) && msg.search_web_calls.length > 0) {
-          // Sort by sequence to ensure correct order
+        // STEP 2: Process search_web_calls (for both default AND code mode)
+        if (msg.search_web_calls && Array.isArray(msg.search_web_calls) && msg.search_web_calls.length > 0) {
           const sortedCalls = msg.search_web_calls.sort((a: any, b: any) => a.sequence - b.sequence);
-  
-          sortedCalls.forEach((searchCall: any) => {
+
+          sortedCalls.forEach((searchCall: any, index: number) => {
             const urls = searchCall.urls?.map((u: any) => ({
               title: u.title,
               url: u.url
             })) || [];
-    
-            toolCalls.push({
+
+            const toolCall: any = {
               name: 'search_web',
               query: searchCall.query,
               urls,
               isLoading: false
-            });
+            };
+
+            // For code mode, infer position based on response structure
+            if (mode === 'code' && codeModeContent) {
+              // Parse the response to find tool call positions
+              const responseText = msg.response;
+      
+              // Check if tool_after_text exists and matches this query
+              if (responseText.includes('"tool_after_text"') && 
+                responseText.includes(`"query": "${searchCall.query}"`)) {
+                toolCall.position = 'after_text';
+              }
+                // Check if tool_before_conclusion exists and matches this query
+              else if (responseText.includes('"tool_before_conclusion"') && 
+                responseText.includes(`"query": "${searchCall.query}"`)) {
+                toolCall.position = 'before_conclusion';
+              }
+              // Otherwise, assume it's after a file
+              else {
+                toolCall.position = 'after_file';
+                toolCall.fileIndex = index;
+              }
+            }
+
+            toolCalls.push(toolCall);
           });
-  
-          // Split content by tool call markers if they exist
-          if (toolCalls.length > 0 && !content.includes('<--tool-call-->')) {
-            // If content doesn't have markers but we have tool calls,
-            // add them at appropriate positions (this is a fallback)
+
+          // For default mode, add markers if they don't exist
+          if (mode === 'default' && toolCalls.length > 0 && !content.includes('<--tool-call-->')) {
             const parts = [content];
             for (let i = 0; i < toolCalls.length - 1; i++) {
               parts.push('');
