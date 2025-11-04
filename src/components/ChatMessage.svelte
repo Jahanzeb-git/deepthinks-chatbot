@@ -101,7 +101,7 @@
     id: number;
     type: 'text' | 'file' | 'conclusion';
     content: string; 
-    file?: { 
+    file?: {
       fileName: string;
       fileVersion?: number;
       fileCode: string;
@@ -384,27 +384,29 @@
 </div>
 
 {#if message.type === 'ai' && !message.isStreaming && (message.content || message.interrupted)}
-  <div class="message-actions">
-    <div class="token-count">{tokenCount} tokens</div>
-    <button class="action-btn" on:click={handleCopy} title="Copy">
-      {#if copied}<Check size={16} />{:else}<Copy size={16} />{/if}
-    </button>
-    <button class="action-btn" title="Good response" disabled={isSharedView}><ThumbsUp size={16} /></button>
-    <button class="action-btn" title="Bad response" disabled={isSharedView}><ThumbsDown size={16} /></button>
-    {#if isLastAiMessage}
-      <button class="action-btn" on:click={handleRegenerate} title="Regenerate response" disabled={isSharedView}>
-        <RefreshCw size={16} />
+  <div class="actions-and-disclaimer">
+    <div class="message-actions">
+      <div class="token-count">{tokenCount} tokens</div>
+      <button class="action-btn" on:click={handleCopy} title="Copy">
+        {#if copied}<Check size={16} />{:else}<Copy size={16} />{/if}
       </button>
-    {/if}
-    {#if message.interrupted}
-      <div class="interrupted-indicator">
-        <AlertTriangle size={14} />
-        <span>Interrupted</span>
-      </div>
-    {/if}
+      <button class="action-btn" title="Good response" disabled={isSharedView}><ThumbsUp size={16} /></button>
+      <button class="action-btn" title="Bad response" disabled={isSharedView}><ThumbsDown size={16} /></button>
+      {#if isLastAiMessage}
+        <button class="action-btn" on:click={handleRegenerate} title="Regenerate response" disabled={isSharedView}>
+          <RefreshCw size={16} />
+        </button>
+      {/if}
+      {#if message.interrupted}
+        <div class="interrupted-indicator">
+          <AlertTriangle size={14} />
+          <span>Interrupted</span>
+        </div>
+      {/if}
+    </div>
     {#if isLastAiMessage}
       <div class="disclaimer-text" transition:fly="{{ y: 10, duration: 500 }}">
-        I dream of electric sheep... and sometimes get my facts mixed up. Please verify.
+        Please verify important info.
       </div>
     {/if}
   </div>
@@ -420,9 +422,10 @@
   .message-content { flex: 1; min-width: 0; text-align: left; }
   .user-message { background: var(--surface-color); color: var(--text-color); padding: 0.75rem 1rem; border-radius: 18px 18px 4px 18px; font-weight: 500; word-wrap: break-word; display: inline-block; max-width: 100%; font-family: 'Nunito', sans-serif; }
   .ai-message, .code-message { font-family: 'Nunito', sans-serif; line-height: 1.6; color: var(--text-color); word-wrap: break-word; max-width: 100%; text-align: left; }
-  .message-actions { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
+  .actions-and-disclaimer { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
+  .message-actions { display: flex; align-items: center; gap: 0.5rem; }
   .interrupted-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); margin-left: auto; font-style: italic; padding: 0.25rem 0.5rem; border-radius: 6px; background-color: var(--hover-color); }
-  .disclaimer-text { font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-left: auto; }
+  .disclaimer-text { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
   .token-count { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.5rem; }
   .action-btn { background: none; border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease; }
   .action-btn:hover:not(:disabled) { background: var(--hover-color); color: var(--text-color); border-color: var(--primary-color); }

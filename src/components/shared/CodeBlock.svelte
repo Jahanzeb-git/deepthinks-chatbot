@@ -147,7 +147,6 @@
     margin: 0;
     padding: 1rem;
     overflow-x: auto;
-    background: var(--background-color);
   }
 
   .code-block-content code {
