@@ -1,6 +1,6 @@
 import { authStore } from '../stores/auth';
 import { get } from 'svelte/store';
-import type { UserSettings } from '../stores/settings'; // Import the shared type
+import type { UserSettings } from '../stores/settings';
 
 const BASE_URL = 'https://chatbot-backend-5u1z.onrender.com';
 
@@ -32,12 +32,10 @@ async function makeRequest(endpoint: string, options: RequestInit = {}) {
     throw new APIError(response.status, errorData.message || errorData.error || 'Request failed');
   }
 
-  // For PATCH, success response might not have a body, so handle that
   if (response.status === 200 && options.method === 'PATCH') {
-    return response.json().catch(() => ({})); // Return empty object if body is empty
+    return response.json().catch(() => ({}));
   }
   
-  // For 201 Created, response might have a body
   if (response.status === 201) {
     return response.json();
   }
@@ -52,7 +50,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ username, email, password })
     });
-    return response; // Returns { message: "Signup successful. Please log in to continue." }
+    return response;
   },
 
   async login(email: string, password: string) {
@@ -60,7 +58,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password })
     });
-    return response; // Returns { access_token, user: { email, username, profile_picture } }
+    return response;
   },
 
   async googleLogin(token: string) {
@@ -68,12 +66,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ token })
     });
-    return response; // Returns { access_token, token_type, user: { email, username, profile_picture } }
+    return response;
   },
 
   // Session Management
   async createSession() {
     return makeRequest('/session_inc');
+  },
+
+  // NEW: Delete individual session
+  async deleteSession(sessionNumber: number) {
+    return makeRequest(`/session/${sessionNumber}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // NEW: Delete all sessions
+  async deleteAllSessions() {
+    return makeRequest('/sessions/all', {
+      method: 'DELETE'
+    });
   },
 
   // Chat
@@ -156,7 +168,6 @@ export const api = {
       if (err.name !== 'AbortError') {
         onError(err);
       } else {
-        // Re-throw the abort error so the calling function can handle it
         throw err;
       }
     }
@@ -203,7 +214,6 @@ export const api = {
     const formData = new FormData();
     formData.append('session_id', sessionId);
 
-    // Append multiple files
     files.forEach(file => {
       formData.append('files', file);
     });
@@ -225,7 +235,6 @@ export const api = {
   },
 
   // Analytics
-
   async postTokenUsage(usage: any, apiKeyIdentifier: string) {
     const auth = get(authStore);
     if (!auth.user?.email) {
@@ -274,7 +283,6 @@ export const api = {
     if (password) {
       url += `?password=${encodeURIComponent(password)}`;
     }
-    // This request does not use the standard makeRequest because it might not need auth
     const response = await fetch(`${BASE_URL}${url}`);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));

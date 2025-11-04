@@ -11,6 +11,7 @@ function createHistoryStore() {
 
   return {
     subscribe,
+    update, // Now exposing the update method
     setHistory: (history: HistoryItem[]) => {
       set(history);
     },

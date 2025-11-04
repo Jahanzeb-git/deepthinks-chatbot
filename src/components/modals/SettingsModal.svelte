@@ -3,6 +3,9 @@
   import { themeStore } from '../../stores/theme'; // USE THE REAL THEME STORE
   import { authStore } from '../../stores/auth'; // IMPORT THE AUTH STORE
   import { analyticsStore } from '../../stores/analytics';
+  import { chatStore } from '../../stores/chat';
+  import { historyStore } from '../../stores/history';
+  import { sessionStore } from '../../stores/session';
   import Modal from './Modal.svelte';
   import Toggle from '../shared/Toggle.svelte';
   import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info, FileText, FileCode, FileImage, Download } from 'lucide-svelte';
@@ -38,6 +41,10 @@
   let selectedFiles: string[] = [];
   let showDeleteFilesConfirmation = false;
   let isDeletingFiles = false;
+
+  let isDeletingChats = false;
+  let deleteChatsSuccess: { deleted_sessions: number; deleted_files: number } | null = null;
+
 
   const sections = {
     General: { icon: User, description: 'Personalization & appearance' },
@@ -122,9 +129,36 @@
     }, 1000);
   }
 
-  function confirmDeleteChats() {
-    console.log("Deleting all chats...");
-    showDeleteChatsModal = false;
+  async function confirmDeleteChats() {
+    if (isDeletingChats) return;
+    isDeletingChats = true;
+    deleteChatsSuccess = null;
+  
+    try {
+      const response = await api.deleteAllSessions();
+      deleteChatsSuccess = {
+        deleted_sessions: response.deleted_sessions,
+        deleted_files: response.deleted_files
+      };
+    
+      // Clear all chat-related state
+      chatStore.clearMessages();
+      historyStore.setHistory([]);
+    
+      // Redirect to home
+      history.pushState({}, '', '/');
+    
+      // Show success for 2.5 seconds, then close
+      setTimeout(() => {
+        showDeleteChatsModal = false;
+        deleteChatsSuccess = null;
+        isDeletingChats = false;
+      }, 2500);
+    } catch (error: any) {
+      console.error("Failed to delete chats:", error);
+      alert(`Failed to delete chats: ${error.message}`);
+      isDeletingChats = false;
+    }
   }
 
   async function confirmDeleteAccount() {
