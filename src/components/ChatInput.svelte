@@ -233,20 +233,7 @@
           <Mic size={18} />
         </button>
         
-        <div class="tooltip-wrapper">
-          <Tooltip text="Log in to use this feature." position="top" enabled={!isAuthenticated}>
-            <button 
-              class="reasoning-toggle" 
-              class:active={reasoning} 
-              on:click={toggleReasoning} 
-              aria-label="Toggle reasoning"
-              disabled={!isAuthenticated || disabled}
-            >
-              <BrainCircuit size={16} />
-              <span class="reasoning-text">Reasoning</span>
-            </button>
-          </Tooltip>
-        </div>
+        
 
         <div class="tooltip-wrapper">
           <Tooltip text="Enable DeepCode Mode" position="top" enabled={!isAuthenticated}>
