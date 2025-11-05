@@ -1,0 +1,31 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .orbit {
+      fill: none;
+      stroke: rgba(99, 102, 241, 0.15);
+      stroke-width: 1px;
+    }
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .dot {
+      fill: #6366f1;
+    }
+  </style>
+  <g transform="translate(24, 24)">
+    <circle class="orbit" r="23.5"/>
+    <circle class="orbit" r="17.5"/>
+    <circle class="orbit" r="11.5"/>
+    <g style="animation: rotate 2.4s linear infinite; transform-origin: center;">
+      <circle class="dot" cx="0" cy="-23.5" r="2"/>
+    </g>
+    <g style="animation: rotate 2s linear infinite reverse; transform-origin: center;">
+      <circle class="dot" cx="0" cy="-17.5" r="2" fill="#8b5cf6"/>
+    </g>
+    <g style="animation: rotate 1.6s linear infinite; transform-origin: center;">
+      <circle class="dot" cx="0" cy="-11.5" r="2" fill="#ec4899"/>
+    </g>
+    <circle r="3" fill="white"/>
+  </g>
+</svg>
