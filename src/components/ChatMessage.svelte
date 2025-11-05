@@ -3,7 +3,7 @@
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
   import { SimpleCodeParser, type ContentSegment } from '../lib/simple-code-parser';
-  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search } from 'lucide-svelte';
+  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search, FileImage, FileText, FileCode, FileAudio, FileVideo, File as FileIcon } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import { chatStore } from '../stores/chat';
   import { artifactStore } from '../stores/artifact';
@@ -228,6 +228,43 @@
     }
   }
 
+  function getFileTypeInfo(type: string, original_name: string) {
+    const ext = original_name.toLowerCase().split('.').pop() || '';
+    
+    if (type.startsWith('image/')) {
+      return { Component: FileImage, color: '#10b981' };
+    }
+    
+    if (type.startsWith('audio/')) {
+      return { Component: FileAudio, color: '#8b5cf6' };
+    }
+    
+    if (type.startsWith('video/')) {
+      return { Component: FileVideo, color: '#f59e0b' };
+    }
+    
+    // Programming files
+    const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt', 'sh', 'bash', 'sql', 'json', 'yaml', 'yml', 'toml', 'lock', 'html', 'css'];
+    if (codeExts.includes(ext)) {
+      return { Component: FileCode, color: '#3b82f6' };
+    }
+    
+    // Document files
+    const docExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'odp', 'ods'];
+    if (docExts.includes(ext)) {
+      return { Component: FileText, color: '#8b5cf6' };
+    }
+    
+    // Text files
+    const textExts = ['txt', 'md', 'csv', 'log', 'xml'];
+    if (textExts.includes(ext)) {
+      return { Component: FileText, color: '#6b7280' };
+    }
+    
+    // Default
+    return { Component: FileIcon, color: '#6b7280' };
+  }
+
   onMount(() => {
     mounted = true;
     if (messageElement) {
@@ -252,26 +289,19 @@
       {#if fileAttachments && Array.isArray(fileAttachments) && fileAttachments.length > 0}
         <div class="file-attachments">
           {#each fileAttachments as file}
+            {@const fileInfo = getFileTypeInfo(file.type, file.original_name)}
             <button 
               class="file-attachment-btn"
               on:click={() => handleFileClick(file)}
             >
-              <div class="file-att-icon">
-                {#if file.is_image}
-                  🖼️
-                {:else if file.type.includes('pdf')}
-                  📄
-                {:else if file.type.includes('word') || file.type.includes('document')}
-                  📝
-                {:else if file.type.includes('sheet') || file.type.includes('csv')}
-                  📊
-                {:else}
-                  📎
-                {/if}
-              </div>
-              <div class="file-att-info">
-                <span class="file-att-name">{file.original_name}</span>
-                <span class="file-att-size">{formatBytes(file.size)}</span>
+              <div class="file-att-content">
+                <div class="file-att-icon" style="color: {fileInfo.color};">
+                  <svelte:component this={fileInfo.Component} size={20} />
+                </div>
+                <div class="file-att-info">
+                  <span class="file-att-name">{file.original_name}</span>
+                  <span class="file-att-size">{formatBytes(file.size)}</span>
+                </div>
               </div>
             </button>
           {/each}
@@ -440,40 +470,62 @@
   .file-attachments {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
   }
+  
   .file-attachment-btn {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0.5rem;
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
-    max-width: 200px;
+    width: 90px;
+    height: 90px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
+  
   .file-attachment-btn:hover {
     border-color: var(--primary-color);
     background: var(--hover-color);
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .file-att-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    width: 100%;
   }
 
   .file-att-icon {
-    font-size: 1.25rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(107, 114, 128, 0.05);
     flex-shrink: 0;
   }
+  
   .file-att-info {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.1rem;
     min-width: 0;
+    width: 100%;
   }
 
   .file-att-name {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 500;
     color: var(--text-color);
     overflow: hidden;
@@ -483,7 +535,7 @@
   }
 
   .file-att-size {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: var(--text-muted);
   }
 
