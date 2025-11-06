@@ -5,6 +5,7 @@
   import { SimpleCodeParser, type ContentSegment } from '../lib/simple-code-parser';
   import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search, FileImage, FileText, FileCode, FileAudio, FileVideo, File as FileIcon } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
+  import { parseUserMessage, type UserMessageSegment } from '../lib/user-message-parser';
   import { chatStore } from '../stores/chat';
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
@@ -12,6 +13,8 @@
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
   import { fly } from 'svelte/transition';
+  import hljs from 'highlight.js';
+
 
   function enhanceContent(node: HTMLElement) {
     // Only for math rendering now - code blocks are handled separately
@@ -62,6 +65,11 @@
     } catch (e) {
       return message.content;
     }
+  })();
+
+  $: userMessageSegments = (() => {
+    if (message?.type !== 'user') return [];
+    return parseUserMessage(userPromptText);
   })();
 
   $: contentParts = message ? message.content.split('<--tool-call-->') : [''];
@@ -309,7 +317,16 @@
       {/if}
       
       <div class="user-message">
-        <pre class="user-message-text">{userPromptText}</pre>
+        {#each userMessageSegments as segment}
+          {#if segment.type === 'text'}
+            <pre class="user-message-text">{segment.content}</pre>
+          {:else if segment.type === 'code'}
+            <div class="user-code-block">
+              <div class="user-code-language">{segment.language}</div>
+              <pre class="user-code-content"><code class="hljs language-{segment.language}">{@html hljs.highlight(segment.content, { language: segment.language, ignoreIllegals: true }).value}</code></pre>
+            </div>
+          {/if}
+        {/each}
       </div>
     </div>
   {:else}
@@ -391,11 +408,7 @@
                     language={segment.language || ''} 
                     inline={false}
                   />
-                {:else if segment.type === 'inline-code'}<CodeBlock
-                    code={segment.content} 
-                    language=""
-                    inline={true}
-                  />{/if}
+                {:else if segment.type === 'inline-code'}<CodeBlock code={segment.content} language="" inline={true} />{/if}
               {/each}
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
@@ -567,4 +580,72 @@
     margin-bottom: 1rem;
   }
 
+  .user-code-block {
+    margin: 0.75rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: var(--hover-color);
+  }
+
+  .user-code-language {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+    letter-spacing: 0.05em;
+    font-family: 'Courier New', monospace;
+  }
+
+  .user-code-content {
+    margin: 0;
+    padding: 0.75rem;
+    overflow-x: auto;
+    background: transparent;
+  }
+
+  .user-code-content code {
+    font-family: 'Courier New', Consolas, Monaco, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-color);
+  }
+
+  .user-code-content::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .user-code-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .user-code-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+  }
+
+  .user-message-text {
+    margin: 0;
+    font-family: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .user-message-text + .user-code-block,
+  .user-code-block + .user-message-text,
+  .user-code-block + .user-code-block {
+    margin-top: 0.5rem;
+  }
+
+  .user-code-block {
+    background: transparent !important;  /* remove mismatched container background */
+    padding: 0 !important;               /* avoid extra gray padding */
+  }
+
+  .user-code {
+    background: var(--surface-color) !important;  /* make code block match bubble */
+  }
 </style>
