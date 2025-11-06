@@ -389,7 +389,7 @@
                 on:input={(e) => handleInput(block.id, e)}
                 on:keydown={(e) => handleKeyDown(block.id, e)}
                 on:focus={() => activeBlockId = block.id}
-                placeholder={index === 0 && blocks.length === 1 ? "Message Deepthinks..." : ""}
+                placeholder={index === 0 && blocks.length === 1 && !block.content ? "Message Deepthinks..." : ""}
               >{block.content}</div>
             {:else}
               <div class="code-block">
@@ -526,11 +526,6 @@
     gap: 8px;
   }
 
-  .input-wrapper:focus-within {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px var(--primary-color-translucent);
-  }
-
   .chat-input-container.initial-state .input-wrapper {
     min-height: 100px;
   }
@@ -563,6 +558,11 @@
   .block-wrapper:last-child {
     margin-bottom: 0;
   }
+
+  .text-block:focus {
+     outline: none;
+     border: none;
+   }
 
   .text-block {
     outline: none;
