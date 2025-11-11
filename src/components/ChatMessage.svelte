@@ -203,7 +203,7 @@
 
     try {
       const response = await fetch(
-        `https://chatbot-backend-5u1z.onrender.com/files/${sessionId}/${file.b2_key}`,
+        `https://chatbot-backend-wandering-shadow-534.fly.dev/${sessionId}/${file.b2_key}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

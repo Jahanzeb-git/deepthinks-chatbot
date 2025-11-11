@@ -2,7 +2,7 @@ import { authStore } from '../stores/auth';
 import { get } from 'svelte/store';
 import type { UserSettings } from '../stores/settings';
 
-const BASE_URL = 'https://chatbot-backend-5u1z.onrender.com';
+const BASE_URL = 'https://chatbot-backend-wandering-shadow-534.fly.dev';
 
 class APIError extends Error {
   constructor(public status: number, message: string) {
