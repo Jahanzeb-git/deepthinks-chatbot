@@ -4,6 +4,7 @@
   import { historyStore, type HistoryItem } from '../stores/history';
   import { authStore } from '../stores/auth';
   import { chatStore } from '../stores/chat';
+  import { sessionStore } from '../stores/session';
   import { isSidebarExpanded } from '../stores/sidebar';
   import { aboutModalStore } from '../stores/about';
   import { sessionUuidStore } from '../stores/sessionUuid';
@@ -19,6 +20,8 @@
   }>();
   
   let activeDropdown: number | null = null;
+  let activeSessionItem: HistoryItem | null = null;
+  let dropdownPosition = { top: 0, left: 0 };
   let renamingSession: number | null = null;
   let renameInput = '';
   let localRenames: { [key: number]: string } = {};
@@ -45,18 +48,27 @@
     dispatch('selectHistory', { sessionNumber: item.session_number });
   }
   
-  function toggleDropdown(event: MouseEvent, sessionNumber: number) {
+  function toggleDropdown(event: MouseEvent, item: HistoryItem) {
     event.stopPropagation();
     event.preventDefault();
-    if (activeDropdown === sessionNumber) {
-      activeDropdown = null;
+    
+    if (activeDropdown === item.session_number) {
+      closeAllDropdowns();
     } else {
-      activeDropdown = sessionNumber;
+      const button = event.currentTarget as HTMLElement;
+      const rect = button.getBoundingClientRect();
+      dropdownPosition = {
+        top: rect.top,
+        left: rect.right + 8 // Slight gap
+      };
+      activeDropdown = item.session_number;
+      activeSessionItem = item;
     }
   }
   
   function closeAllDropdowns() {
     activeDropdown = null;
+    activeSessionItem = null;
     renamingSession = null;
   }
   
@@ -71,6 +83,7 @@
     renamingSession = sessionNumber;
     renameInput = localRenames[sessionNumber] || currentPrompt;
     activeDropdown = null;
+    activeSessionItem = null;
     
     setTimeout(() => {
       const input = document.querySelector('.rename-input') as HTMLInputElement;
@@ -109,6 +122,7 @@
     
     isDeletingSession = sessionNumber;
     activeDropdown = null;
+    activeSessionItem = null;
     
     try {
       const response = await api.deleteSession(sessionNumber);
@@ -246,6 +260,7 @@
                   <a 
                     href="/{sessionUuidStore.getUuidBySessionNumber(item.session_number) || ''}"
                     class="history-item"
+                    class:active={$sessionStore.currentSession === item.session_number}
                     class:deleting={isDeletingSession === item.session_number}
                     on:click={(e) => handleHistoryClick(e, item)}
                     title={`Continue chat: ${getDisplayName(item)}`}
@@ -257,32 +272,13 @@
                     
                     <button 
                       class="more-btn"
-                      on:click={(e) => toggleDropdown(e, item.session_number)}
+                      on:click={(e) => toggleDropdown(e, item)}
                       title="More options"
                       disabled={isDeletingSession === item.session_number}
                     >
                       <MoreVertical size={14} strokeWidth={1.5} />
                     </button>
                   </a>
-                  
-                  {#if activeDropdown === item.session_number}
-                    <div class="dropdown-menu" on:click|stopPropagation>
-                      <button 
-                        class="dropdown-item"
-                        on:click={() => startRename(item.session_number, item.prompt)}
-                      >
-                        <Edit3 size={14} strokeWidth={1.5} />
-                        <span>Rename</span>
-                      </button>
-                      <button 
-                        class="dropdown-item delete"
-                        on:click={() => deleteSession(item.session_number)}
-                      >
-                        <Trash2 size={14} strokeWidth={1.5} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  {/if}
                 {/if}
               </div>
             {/each}
@@ -312,6 +308,34 @@
       </div>
     </div>
   </aside>
+  
+  <!-- Dropdown Menu (Fixed Position) -->
+  {#if activeDropdown !== null && activeSessionItem}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <div 
+      class="dropdown-menu" 
+      style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px"
+      on:click|stopPropagation
+    >
+      <div class="dropdown-info">
+        <span class="dropdown-date">{formatTimestamp(activeSessionItem.timestamp)}</span>
+      </div>
+      <button 
+        class="dropdown-item"
+        on:click={() => startRename(activeSessionItem.session_number, activeSessionItem.prompt)}
+      >
+        <Edit3 size={14} strokeWidth={1.5} />
+        <span>Rename</span>
+      </button>
+      <button 
+        class="dropdown-item delete"
+        on:click={() => deleteSession(activeSessionItem.session_number)}
+      >
+        <Trash2 size={14} strokeWidth={1.5} />
+        <span>Delete</span>
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -584,6 +608,16 @@
     background: var(--sb-hover);
     color: var(--sb-text);
   }
+
+  .history-item.active {
+    background: var(--sb-active-bg);
+    color: var(--sb-text);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  }
+  .history-item.active .history-prompt {
+    font-weight: 600;
+  }
   
   .history-content {
     flex: 1;
@@ -626,18 +660,27 @@
   }
   
   .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
+    position: fixed;
     background: var(--sb-bg);
     border: 1px solid var(--sb-border);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    padding: 4px;
-    z-index: 1000;
-    min-width: 140px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    z-index: 9999;
+    min-width: 160px;
     animation: dropdownFadeIn 0.2s ease;
+  }
+  
+  .dropdown-info {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--sb-border);
+    margin-bottom: 4px;
+  }
+  
+  .dropdown-date {
+    font-size: 0.75rem;
+    color: var(--sb-text-muted);
+    font-weight: 500;
   }
   
   @keyframes dropdownFadeIn {
