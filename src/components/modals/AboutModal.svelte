@@ -1,7 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import Modal from './Modal.svelte';
-  import { Info, Link, Mail, Github } from 'lucide-svelte';
+  import { X, Info, Link, Mail, Github, Code2, Brain, Scale } from 'lucide-svelte';
 
   export let isOpen = false;
 
@@ -12,267 +11,423 @@
   }
 </script>
 
-<Modal {isOpen} on:close={closeModal} title="About This Project" modalClass="about-modal">
-  <div class="about-content">
-    <div class="about-header">
-      <div class="header-icon">
-        <Info size={28} />
-      </div>
-      <h2 class="about-title">Project Information</h2>
-    </div>
-    
-    <p class="about-description">
-      This project is a portfolio piece and does not represent a commercial application. As it has not been thoroughly tested, there may be bugs or mistakes.
-    </p>
-    
-    <div class="developer-section">
-      <div class="developer-info">
-        <h3 class="developer-title">Developer</h3>
-        <p class="developer-name">Jahanzeb Ahmed</p>
-      </div>
-      
-      <div class="contact-links">
-        <a href="https://jahanzebahmed.netlify.app" target="_blank" rel="noopener noreferrer" class="contact-link">
-          <Link size={18} />
-          <span>Website</span>
-        </a>
-        <a href="https://github.com/Jahanzeb-git" target="_blank" rel="noopener noreferrer" class="contact-link">
-          <Github size={18} />
-          <span>GitHub</span>
-        </a>
-        <a href="mailto:jahanzebahmed.mail@gmail.com" class="contact-link">
-          <Mail size={18} />
-          <span>Email</span>
-        </a>
+{#if isOpen}
+  <div class="modal-backdrop" on:click={closeModal}>
+    <div class="modal-content" on:click|stopPropagation>
+      <button class="close-btn" on:click={closeModal} aria-label="Close modal">
+        <X size={20} strokeWidth={1.5} />
+      </button>
+
+      <div class="modal-grid">
+        <!-- Left Column: Identity & Bio -->
+        <div class="modal-sidebar">
+          <div class="brand-section">
+            <div class="header-icon">
+              <Info size={32} strokeWidth={1.5} />
+            </div>
+            <h2 class="modal-title">Deepthinks</h2>
+            <p class="modal-subtitle">Applied AI Portfolio</p>
+          </div>
+
+          <div class="developer-card">
+            <p class="dev-label">Designed & Engineered by</p>
+            <h3 class="dev-name">Jahanzeb Ahmed</h3>
+            <div class="contact-links">
+              <a href="https://jahanzebahmed.netlify.app" target="_blank" rel="noopener noreferrer" class="contact-link" title="Portfolio">
+                <Link size={16} strokeWidth={1.5} />
+              </a>
+              <a href="https://github.com/Jahanzeb-git" target="_blank" rel="noopener noreferrer" class="contact-link" title="GitHub">
+                <Github size={16} strokeWidth={1.5} />
+              </a>
+              <a href="mailto:jahanzebahmed.mail@gmail.com" class="contact-link" title="Email">
+                <Mail size={16} strokeWidth={1.5} />
+              </a>
+            </div>
+          </div>
+          
+          <div class="license-badge">
+            <Scale size={16} strokeWidth={1.5} />
+            <span>MIT Licensed</span>
+          </div>
+        </div>
+
+        <!-- Right Column: Technical Details -->
+        <div class="modal-main">
+          <p class="intro-text">
+            This application serves as a comprehensive demonstration of expertise in <strong>Applied AI Engineering</strong>. It is a non-commercial portfolio piece designed to showcase advanced architectural capabilities.
+          </p>
+
+          <div class="features-grid">
+            <div class="feature-item">
+              <div class="feature-icon">
+                <Code2 size={20} strokeWidth={1.5} />
+              </div>
+              <div class="feature-content">
+                <h4>Pure Implementation</h4>
+                <p>Built entirely without high-level abstractions like LangChain or LangGraph, demonstrating deep understanding of LLM orchestration.</p>
+              </div>
+            </div>
+
+            <div class="feature-item">
+              <div class="feature-icon">
+                <Brain size={20} strokeWidth={1.5} />
+              </div>
+              <div class="feature-content">
+                <h4>Dynamic Smoothing Memory</h4>
+                <p>Features a proprietary memory system designed for enhanced context retention and fluid conversation flow.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="repo-cta">
+            <p>Access the complete source code for frontend and backend architectures on GitHub.</p>
+            <a href="https://github.com/Jahanzeb-git" target="_blank" rel="noopener noreferrer" class="repo-link">
+              View Repository <Github size={14} strokeWidth={1.5} style="margin-left: 6px;" />
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</Modal>
+{/if}
 
 <style>
-  :global(.about-modal) {
-    --modal-width: min(480px, 90vw);
-    --modal-max-width: 480px;
-    --modal-height: auto;
-    --modal-max-height: min(520px, 85vh);
-    border-radius: 20px;
-    overflow: hidden;
+  /* --- Local Design System: Warm Editorial --- */
+  .modal-content {
+    /* Light Mode Defaults */
+    --am-bg: #F9F8F6;
+    --am-sidebar-bg: #F2F0ED;
+    --am-text: #2C2C2C;
+    --am-text-muted: #787570;
+    --am-border: rgba(0, 0, 0, 0.06);
+    --am-hover: rgba(44, 44, 44, 0.05);
+    --am-accent: #667eea;
+    --am-font-serif: "Merriweather", "Georgia", serif;
+    --am-font-sans: "Inter", system-ui, sans-serif;
   }
 
-  :global(.about-modal .modal-header) {
-    display: none;
+  :global([data-theme="dark"]) .modal-content {
+    /* Dark Mode Overrides */
+    --am-bg: #1C1B1A;
+    --am-sidebar-bg: #232221;
+    --am-text: #E6E4E0;
+    --am-text-muted: #9C9A96;
+    --am-border: rgba(255, 255, 255, 0.06);
+    --am-hover: rgba(255, 255, 255, 0.05);
   }
 
-  :global(.about-modal .modal-body) {
-    padding: 0;
-    overflow-y: hidden;
-  }
-
-  .about-content {
-    padding: 1.75rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 0;
-  }
-
-  .about-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 1.25rem;
-  }
-
-  .header-icon {
-    width: 56px;
-    height: 56px;
-    background: var(--primary-color-translucent);
-    border-radius: 16px;
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--primary-color);
-    margin-bottom: 0.75rem;
-    transition: all 0.3s ease;
+    z-index: 2000;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    animation: fadeIn 0.3s ease;
+    padding: 2.5rem;
   }
 
-  .about-title {
-    font-size: 1.375rem;
-    font-weight: 600;
-    color: var(--text-color);
-    margin: 0;
-    text-align: center;
-  }
-
-  .about-description {
-    font-size: 0.95rem;
-    color: var(--text-muted);
-    line-height: 1.5;
-    text-align: center;
-    margin: 0 0 1.5rem 0;
-    max-width: 100%;
-  }
-
-  .developer-section {
+  .modal-content {
+    background: var(--am-bg);
+    color: var(--am-text);
+    border-radius: 16px;
     width: 100%;
+    max-width: 800px;
+    max-height: calc(100vh - 5rem);
+    box-shadow: 
+      0 10px 30px -5px rgba(0, 0, 0, 0.1),
+      0 0 0 1px var(--am-border);
+    position: relative;
+    font-family: var(--am-font-sans);
+    animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+  }
+
+  .modal-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 400px;
+  }
+
+  /* --- Sidebar (Left) --- */
+  .modal-sidebar {
+    background: var(--am-sidebar-bg);
+    padding: 2.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--am-border);
+    text-align: center;
+    align-items: center;
+  }
+
+  .brand-section {
+    margin-bottom: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.25rem;
   }
 
-  .developer-info {
-    text-align: center;
+  .header-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--am-bg);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--am-text);
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
   }
 
-  .developer-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-color);
-    margin: 0 0 0.375rem 0;
+  .modal-title {
+    font-family: var(--am-font-serif);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--am-text);
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.02em;
   }
 
-  .developer-name {
-    font-size: 1rem;
-    color: var(--text-muted);
-    margin: 0;
+  .modal-subtitle {
+    font-size: 0.875rem;
+    color: var(--am-text-muted);
     font-weight: 500;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .developer-card {
+    margin: 2rem 0;
+    width: 100%;
+  }
+
+  .dev-label {
+    font-size: 0.75rem;
+    color: var(--am-text-muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .dev-name {
+    font-family: var(--am-font-serif);
+    font-size: 1.125rem;
+    color: var(--am-text);
+    margin: 0 0 1rem;
+    font-weight: 600;
   }
 
   .contact-links {
     display: flex;
     justify-content: center;
-    align-items: center;
     gap: 0.75rem;
-    width: 100%;
-    flex-wrap: wrap;
   }
 
   .contact-link {
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1rem;
-    border-radius: 12px;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    text-decoration: none;
-    transition: all 0.25s ease;
-    font-size: 0.9rem;
-    font-weight: 500;
-    min-width: 0;
-    flex: 1;
-    max-width: 120px;
+    border-radius: 50%;
+    background: var(--am-bg);
+    border: 1px solid var(--am-border);
+    color: var(--am-text-muted);
+    transition: all 0.2s ease;
   }
 
   .contact-link:hover {
-    background: var(--hover-color);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    color: var(--am-text);
+    border-color: var(--am-text);
+    transform: translateY(-2px);
   }
 
-  .contact-link:active {
-    transform: translateY(0);
+  .license-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--am-text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    border: 1px solid var(--am-border);
+    background: var(--am-bg);
+    margin-top: auto;
   }
 
-  /* Mobile optimizations */
-  @media (max-width: 640px) {
-    :global(.about-modal) {
-      --modal-width: calc(100vw - 2rem);
-      --modal-max-width: calc(100vw - 2rem);
-      --modal-max-height: min(480px, 80vh);
-      border-radius: 16px;
+  /* --- Main Content (Right) --- */
+  .modal-main {
+    padding: 2.5rem 3rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .intro-text {
+    font-family: var(--am-font-serif);
+    font-size: 1.125rem;
+    line-height: 1.6;
+    color: var(--am-text);
+    margin-bottom: 2.5rem;
+  }
+
+  .features-grid {
+    display: grid;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .feature-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .feature-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--am-sidebar-bg);
+    border-radius: 8px;
+    color: var(--am-text);
+  }
+
+  .feature-content h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+    color: var(--am-text);
+  }
+
+  .feature-content p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--am-text-muted);
+    margin: 0;
+  }
+
+  .repo-cta {
+    margin-top: auto;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--am-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .repo-cta p {
+    font-size: 0.875rem;
+    color: var(--am-text-muted);
+    margin: 0;
+  }
+
+  .repo-link {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--am-text);
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .repo-link:hover {
+    opacity: 0.7;
+    text-decoration: underline;
+  }
+
+  /* --- Close Button --- */
+  .close-btn {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--am-text-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    z-index: 10;
+  }
+  .close-btn:hover {
+    background: var(--am-hover);
+    color: var(--am-text);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.98) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* --- Mobile Responsive --- */
+  @media (max-width: 768px) {
+    .modal-backdrop {
+      padding: 1rem;
     }
 
-    .about-content {
-      padding: 1.5rem 1.25rem;
+    .modal-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .modal-sidebar {
+      border-right: none;
+      border-bottom: 1px solid var(--am-border);
+      padding: 2rem 1.5rem;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      text-align: left;
+      align-items: center;
     }
 
-    .header-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      margin-bottom: 0.625rem;
-    }
-
-    .about-title {
-      font-size: 1.25rem;
-    }
-
-    .about-description {
-      font-size: 0.9rem;
-      margin-bottom: 1.25rem;
-    }
-
-    .developer-section {
+    .brand-section {
+      flex-direction: row;
+      align-items: center;
       gap: 1rem;
+      margin: 0;
+    }
+    
+    .header-icon {
+      margin: 0;
+      width: 40px;
+      height: 40px;
     }
 
-    .developer-title {
-      font-size: 1rem;
+    .modal-title {
+      font-size: 1.25rem;
+      margin: 0;
+    }
+    
+    .modal-subtitle {
+      font-size: 0.75rem;
     }
 
-    .developer-name {
-      font-size: 0.95rem;
-    }
-
-    .contact-links {
-      gap: 0.5rem;
-    }
-
-    .contact-link {
-      padding: 0.5rem 0.75rem;
-      font-size: 0.85rem;
-      max-width: 110px;
-      border-radius: 10px;
-    }
-
-    .contact-link span {
+    .developer-card, .license-badge {
       display: none;
     }
-  }
-
-  /* Extra small mobile devices */
-  @media (max-width: 480px) {
-    :global(.about-modal) {
-      --modal-width: calc(100vw - 1.5rem);
-      --modal-max-width: calc(100vw - 1.5rem);
+    
+    .modal-main {
+      padding: 1.5rem;
     }
 
-    .about-content {
-      padding: 1.25rem 1rem;
+    .intro-text {
+      font-size: 1rem;
+      margin-bottom: 1.5rem;
     }
-
-    .contact-links {
-      justify-content: space-between;
-    }
-
-    .contact-link {
-      flex: 0 1 auto;
-      min-width: 48px;
-      max-width: 48px;
-      padding: 0.5rem;
-      aspect-ratio: 1;
-    }
-  }
-
-  /* Large screens */
-  @media (min-width: 1024px) {
-    .about-content {
-      padding: 2rem 1.75rem;
-    }
-
-    .header-icon:hover {
-      transform: scale(1.05);
-    }
-
-    .contact-link {
-      max-width: 140px;
+    
+    .close-btn {
+      top: 1rem;
+      right: 1rem;
     }
   }
 </style>
