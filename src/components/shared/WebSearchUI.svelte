@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Globe, ChevronDown, ExternalLink } from 'lucide-svelte';
   import { slide } from 'svelte/transition';
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   
   export let query: string = '';
   export let urls: Array<{ title: string; url: string }> = [];
@@ -10,10 +10,12 @@
   let isExpanded = false;
   let currentDomainIndex = 0;
   let animationInterval: any = null;
+  let showAnimation = false;
+  let animationTimeout: any = null;
   
   $: domains = urls.map(u => getDomain(u.url));
   $: hasResults = urls.length > 0;
-  $: canExpand = hasResults && !isLoading;
+  $: canExpand = hasResults && !isLoading && !showAnimation;
   
   function getDomain(url: string): string {
     try {
@@ -30,19 +32,28 @@
     }
   }
   
-  // Start domain animation when loading
-  $: if (isLoading && domains.length > 0) {
+  // Start domain animation when we have domains
+  $: if (domains.length > 0 && !showAnimation) {
     startAnimation();
-  } else {
+  } else if (domains.length === 0) {
     stopAnimation();
   }
   
   function startAnimation() {
     if (animationInterval) return;
     
+    showAnimation = true;
+    currentDomainIndex = 0;
+    
     animationInterval = setInterval(() => {
       currentDomainIndex = (currentDomainIndex + 1) % domains.length;
     }, 2000); // Change domain every 2 seconds
+    
+    // Stop animation after showing all domains exactly once + typing time for last domain
+    const duration = (domains.length * 2000) + 1500; // 2s per domain + 1.5s for last typing
+    animationTimeout = setTimeout(() => {
+      stopAnimation();
+    }, duration);
   }
   
   function stopAnimation() {
@@ -50,6 +61,11 @@
       clearInterval(animationInterval);
       animationInterval = null;
     }
+    if (animationTimeout) {
+      clearTimeout(animationTimeout);
+      animationTimeout = null;
+    }
+    showAnimation = false;
   }
   
   onDestroy(() => {
@@ -67,12 +83,12 @@
       <Globe size={18} />
     </div>
     <div class="search-info">
-      {#if isLoading && domains.length > 0}
+      {#if showAnimation && domains.length > 0}
         <span class="search-label animated">
-          Searching <span class="domain-animation typing-effect" key={currentDomainIndex}>{domains[currentDomainIndex]}</span>
+          Searched <span class="domain-animation typing-effect" key={currentDomainIndex}>{domains[currentDomainIndex]}</span>
         </span>
       {:else if isLoading}
-        <span class="search-label">Searching the web...</span>
+        <span class="search-label">Searching the web<span class="loading-dots"></span></span>
       {:else if hasResults}
         <span class="search-label">
           Searched {urls.length} {urls.length === 1 ? 'site' : 'sites'}
@@ -188,26 +204,29 @@
   }
 
   .typing-effect {
-    animation: fadeSlide 0.4s ease-in-out, typing 0.8s steps(30) forwards;
+    animation: typing 1.2s steps(40) forwards;
     overflow: hidden;
     white-space: nowrap;
     max-width: 0;
+    display: inline-block;
   }
   
-  @keyframes fadeSlide {
-    0% {
-      opacity: 0;
-      transform: translateY(-3px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
   @keyframes typing {
     from { max-width: 0; }
     to { max-width: 300px; }
+  }
+
+  /* Animated loading dots */
+  .loading-dots::after {
+    content: '';
+    animation: loadingDots 1.5s infinite;
+  }
+
+  @keyframes loadingDots {
+    0%, 20% { content: ''; }
+    40% { content: '.'; }
+    60% { content: '..'; }
+    80%, 100% { content: '...'; }
   }
   
   .expand-icon {
