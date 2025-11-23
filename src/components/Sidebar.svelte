@@ -169,15 +169,15 @@
         <div class="brand-icon-wrapper">
           {#if $isSidebarExpanded}
             <div class="brand-icon">
-              <MessageSquare size={20} />
+              <MessageSquare size={18} strokeWidth={1.5} />
             </div>
             <span class="brand-text">Deepthinks</span>
           {:else}
             <div class="brand-icon logo-as-button" class:hovered={isHoveringLogo}>
               {#if isHoveringLogo}
-                <ChevronsRight size={20} />
+                <ChevronsRight size={18} strokeWidth={1.5} />
               {:else}
-                <MessageSquare size={20} />
+                <MessageSquare size={18} strokeWidth={1.5} />
               {/if}
             </div>
           {/if}
@@ -185,7 +185,7 @@
         
         {#if $isSidebarExpanded}
           <div class="toggle-icon-inline">
-            <ChevronsLeft size={18} />
+            <ChevronsLeft size={16} strokeWidth={1.5} />
           </div>
         {/if}
       </button>
@@ -201,7 +201,7 @@
         {disabled}
       >
         <div class="btn-icon">
-          <Plus size={$isSidebarExpanded ? 18 : 20} />
+          <Plus size={18} strokeWidth={1.5} />
         </div>
         {#if $isSidebarExpanded}
           <span class="btn-text">New Conversation</span>
@@ -231,14 +231,14 @@
                         on:click={() => saveRename(item.session_number)}
                         title="Save"
                       >
-                        <Check size={14} />
+                        <Check size={14} strokeWidth={1.5} />
                       </button>
                       <button 
                         class="rename-action-btn cancel"
                         on:click={cancelRename}
                         title="Cancel"
                       >
-                        <X size={14} />
+                        <X size={14} strokeWidth={1.5} />
                       </button>
                     </div>
                   </div>
@@ -251,12 +251,8 @@
                     title={`Continue chat: ${getDisplayName(item)}`}
                     aria-disabled={disabled}
                   >
-                    <div class="history-icon">
-                      <MessageSquare size={14} />
-                    </div>
                     <div class="history-content">
                       <span class="history-prompt">{truncateText(getDisplayName(item), 35)}</span>
-                      <span class="history-time">{formatTimestamp(item.timestamp)}</span>
                     </div>
                     
                     <button 
@@ -265,7 +261,7 @@
                       title="More options"
                       disabled={isDeletingSession === item.session_number}
                     >
-                      <MoreVertical size={16} />
+                      <MoreVertical size={14} strokeWidth={1.5} />
                     </button>
                   </a>
                   
@@ -275,14 +271,14 @@
                         class="dropdown-item"
                         on:click={() => startRename(item.session_number, item.prompt)}
                       >
-                        <Edit3 size={14} />
+                        <Edit3 size={14} strokeWidth={1.5} />
                         <span>Rename</span>
                       </button>
                       <button 
                         class="dropdown-item delete"
                         on:click={() => deleteSession(item.session_number)}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={14} strokeWidth={1.5} />
                         <span>Delete</span>
                       </button>
                     </div>
@@ -307,7 +303,7 @@
           {disabled}
         >
           <div class="btn-icon">
-            <Info size={$isSidebarExpanded ? 18 : 20} />
+            <Info size={18} strokeWidth={1.5} />
           </div>
           {#if $isSidebarExpanded}
             <span class="btn-text">About</span>
@@ -319,11 +315,38 @@
 </div>
 
 <style>
+  /* --- Design System: Warm Editorial --- */
+  :global(:root) {
+    /* Light Mode - Warm Paper */
+    --sb-bg: #F9F8F6;
+    --sb-text: #2C2C2C;
+    --sb-text-muted: #787570;
+    --sb-border: rgba(0, 0, 0, 0.04);
+    --sb-hover: rgba(44, 44, 44, 0.04);
+    --sb-active-bg: #EBE9E5;
+    --sb-accent: #667eea; /* Keeping brand color but using it subtly */
+    --sb-accent-muted: rgba(102, 126, 234, 0.08);
+    --sb-font-serif: "Merriweather", "Georgia", serif;
+    --sb-font-sans: "Inter", system-ui, sans-serif;
+  }
+
+  :global([data-theme="dark"]) {
+    /* Dark Mode - Warm Charcoal */
+    --sb-bg: #1C1B1A;
+    --sb-text: #E6E4E0;
+    --sb-text-muted: #9C9A96;
+    --sb-border: rgba(255, 255, 255, 0.04);
+    --sb-hover: rgba(255, 255, 255, 0.04);
+    --sb-active-bg: #2A2928;
+    --sb-accent-muted: rgba(102, 126, 234, 0.15);
+  }
+
   /* --- Main Structure --- */
   .sidebar-wrapper {
     position: relative;
-    transition: width 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    transition: width 0.5s cubic-bezier(0.19, 1, 0.22, 1); /* Slower, more elegant easing */
     width: var(--sidebar-collapsed-width, 60px);
+    font-family: var(--sb-font-sans);
   }
   .sidebar-wrapper.expanded {
     width: var(--sidebar-expanded-width, 300px);
@@ -339,9 +362,9 @@
     left: 0;
     height: 100vh;
     width: var(--sidebar-collapsed-width, 60px);
-    background: var(--surface-color);
-    border-right: 1px solid var(--border-color);
-    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    background: var(--sb-bg);
+    border-right: 1px solid var(--sb-border);
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
     z-index: 100;
     overflow: hidden;
     display: flex;
@@ -354,7 +377,7 @@
   /* --- Header with Brand/Toggle --- */
   .sidebar-header {
     flex-shrink: 0;
-    border-bottom: 1px solid var(--border-color);
+    padding: 1.5rem 1rem 0.5rem 1rem; /* More top padding */
   }
   
   .brand {
@@ -362,39 +385,38 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem;
     background: none;
     border: none;
     cursor: pointer;
     transition: all 0.3s ease;
-    position: relative;
+    border-radius: 8px;
+    color: var(--sb-text);
   }
   
   .brand.collapsed {
     justify-content: center;
-    padding: 1rem 0;
+    padding: 0.75rem 0;
   }
   
   .brand:hover {
-    background: var(--hover-color);
+    background: var(--sb-hover);
   }
   
   .brand-icon-wrapper {
     display: flex;
     align-items: center;
-    gap: 0.875rem;
+    gap: 0.75rem;
   }
   
   .brand-icon {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--primary-color);
-    background: rgba(102, 126, 234, 0.1);
-    border-radius: 8px;
+    color: var(--sb-text);
     transition: all 0.3s ease;
   }
   
@@ -403,36 +425,29 @@
   }
   
   .brand-icon.logo-as-button.hovered {
-    background: var(--primary-color);
-    color: white;
+    color: var(--sb-accent);
     transform: scale(1.05);
   }
   
   .brand-text {
+    font-family: var(--sb-font-serif);
     font-weight: 700;
-    font-size: 1.125rem;
-    color: var(--text-color);
+    font-size: 1.1rem;
+    color: var(--sb-text);
     white-space: nowrap;
     opacity: 0;
-    animation: fadeInSlide 0.4s ease forwards 0.1s;
+    animation: fadeInSlide 0.5s ease forwards 0.1s;
+    letter-spacing: -0.01em;
   }
   
   .toggle-icon-inline {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    color: var(--text-muted);
+    color: var(--sb-text-muted);
     transition: all 0.2s ease;
     opacity: 0;
-    animation: fadeInSlide 0.4s ease forwards 0.2s;
-  }
-  
-  .brand:hover .toggle-icon-inline {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--text-color);
+    animation: fadeInSlide 0.5s ease forwards 0.2s;
   }
   
   /* --- Content Area --- */
@@ -440,7 +455,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 1.25rem 0;
+    padding: 1rem 0;
     overflow: hidden;
   }
 
@@ -451,125 +466,113 @@
     justify-content: center;
     border: none;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-    font-weight: 500;
+    transition: all 0.3s ease;
+    font-weight: 400;
     white-space: nowrap;
     position: relative;
     overflow: hidden;
     margin: 0 auto;
-    border-radius: 10px;
-    width: 40px;
-    height: 40px;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
     text-decoration: none;
+    color: var(--sb-text);
   }
   .new-chat-btn.expanded, .action-btn.expanded {
     width: calc(100% - 2rem);
     justify-content: flex-start;
-    gap: 0.875rem;
-    padding: 0;
-    min-height: 44px;
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+    min-height: 40px;
+    margin: 0 1rem;
   }
   
   .new-chat-btn {
-    background: var(--primary-color);
-    color: white;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+    background: transparent;
+    border: 1px solid var(--sb-border);
+    margin-bottom: 1rem;
   }
   .new-chat-btn:hover {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+    background: var(--sb-hover);
+    border-color: transparent;
   }
   
   .action-btn {
     background: transparent;
-    color: var(--text-muted);
-  }
-  .action-btn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 10px;
-    background: var(--hover-color);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  .action-btn:hover::before {
-    opacity: 1;
+    color: var(--sb-text-muted);
   }
   .action-btn:hover {
-    color: var(--text-color);
+    background: var(--sb-hover);
+    color: var(--sb-text);
   }
 
   .btn-icon {
     flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    z-index: 1;
   }
   .btn-text {
-    padding-right: 1.25rem;
     opacity: 0;
-    animation: fadeInSlide 0.4s ease forwards 0.1s;
+    animation: fadeInSlide 0.5s ease forwards 0.1s;
     font-size: 0.9rem;
-    position: relative;
-    z-index: 1;
+    letter-spacing: 0.01em;
   }
 
   /* --- History --- */
   .history-section {
     flex: 1;
-    margin-top: 1.5rem;
+    margin-top: 1rem;
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
   .history-header {
-    padding: 0 1.25rem;
+    padding: 0 1.5rem;
     margin-bottom: 0.75rem;
+    font-family: var(--sb-font-serif);
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    color: var(--sb-text-muted);
+    letter-spacing: 0.05em;
     opacity: 0;
-    animation: fadeInSlide 0.4s ease forwards 0.2s;
+    animation: fadeInSlide 0.5s ease forwards 0.2s;
   }
   .history-list {
     flex: 1;
     overflow-y: auto;
-    padding: 0 1rem;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8px, black calc(100% - 8px), transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, black 8px, black calc(100% - 8px), transparent 100%);
+    padding: 0 0.75rem;
+    /* Subtle scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--sb-border) transparent;
   }
   
   .history-item-wrapper {
     position: relative;
     width: 100%;
-    margin-bottom: 0.25rem;
+    margin-bottom: 2px;
     opacity: 0;
-    animation: fadeInSlide 0.4s ease forwards;
-    animation-delay: calc(0.3s + var(--delay, 0) * 0.05s);
+    animation: fadeInSlide 0.5s ease forwards;
+    animation-delay: calc(0.2s + var(--delay, 0) * 0.03s);
   }
   
   .history-item {
     width: 100%;
     display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.875rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
     background: transparent;
     border: none;
-    border-radius: 10px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    transition: all 0.2s ease;
     text-align: left;
-    position: relative;
     text-decoration: none;
+    color: var(--sb-text-muted);
   }
   
   .history-item.deleting {
@@ -577,138 +580,89 @@
     pointer-events: none;
   }
   
-  .history-item::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 10px;
-    background: var(--hover-color);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  .history-item:hover::before {
-    opacity: 1;
-  }
   .history-item:hover {
-    transform: translateX(2px);
+    background: var(--sb-hover);
+    color: var(--sb-text);
+  }
+  
+  .history-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .history-prompt {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+    display: block;
+  }
+  
+  /* --- More Button & Dropdown --- */
+  .more-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--sb-text-muted);
+    opacity: 0;
+    transition: all 0.2s ease;
   }
   
   .history-item:hover .more-btn {
     opacity: 1;
   }
   
-  .history-icon {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    background: rgba(102, 126, 234, 0.08);
-    border-radius: 6px;
-    margin-top: 2px;
-    position: relative;
-    z-index: 1;
-  }
-  .history-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 0;
-    flex: 1;
-    position: relative;
-    z-index: 1;
-  }
-  .history-prompt {
-    font-size: 0.875rem;
-    color: var(--text-color);
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 500;
-  }
-  .history-time {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-  
-  /* --- More Button & Dropdown --- */
-  .more-btn {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--text-muted);
-    opacity: 0;
-    transition: all 0.2s ease;
-    position: relative;
-    z-index: 2;
-  }
-  
   .more-btn:hover {
     background: rgba(0, 0, 0, 0.05);
-    color: var(--text-color);
-  }
-  
-  .more-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+    color: var(--sb-text);
   }
   
   .dropdown-menu {
     position: absolute;
     top: 100%;
-    right: 8px;
+    right: 0;
     margin-top: 4px;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-    padding: 6px;
+    background: var(--sb-bg);
+    border: 1px solid var(--sb-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 4px;
     z-index: 1000;
-    min-width: 160px;
-    animation: dropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    min-width: 140px;
+    animation: dropdownFadeIn 0.2s ease;
   }
   
   @keyframes dropdownFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   
   .dropdown-item {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 0.875rem;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
     background: none;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--text-color);
+    font-size: 0.85rem;
+    color: var(--sb-text);
     transition: all 0.2s ease;
     text-align: left;
   }
   
   .dropdown-item:hover {
-    background: var(--hover-color);
+    background: var(--sb-hover);
   }
   
   .dropdown-item.delete {
@@ -716,7 +670,7 @@
   }
   
   .dropdown-item.delete:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.08);
   }
   
   /* --- Rename Input --- */
@@ -724,11 +678,10 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 0.875rem;
-    background: var(--hover-color);
-    border-radius: 10px;
-    border: 1.5px solid var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    padding: 0.375rem 0.5rem;
+    background: var(--sb-active-bg);
+    border-radius: 6px;
+    border: 1px solid var(--sb-accent);
   }
   
   .rename-input {
@@ -737,25 +690,24 @@
     border: none;
     outline: none;
     font-size: 0.875rem;
-    color: var(--text-color);
-    font-weight: 500;
+    color: var(--sb-text);
     padding: 0;
   }
   
   .rename-actions {
     display: flex;
-    gap: 4px;
+    gap: 2px;
   }
   
   .rename-action-btn {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: none;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
@@ -763,41 +715,37 @@
   .rename-action-btn.save {
     color: #10b981;
   }
-  
   .rename-action-btn.save:hover {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.1);
   }
-  
   .rename-action-btn.cancel {
-    color: var(--text-muted);
+    color: var(--sb-text-muted);
   }
-  
   .rename-action-btn.cancel:hover {
-    background: rgba(0, 0, 0, 0.08);
-    color: var(--text-color);
+    background: rgba(0, 0, 0, 0.05);
   }
 
   /* --- Bottom Actions --- */
   .bottom-actions {
     margin-top: auto;
-    padding: 1.25rem 0;
-    border-top: 1px solid var(--border-color);
+    padding: 1rem 0;
+    border-top: 1px solid var(--sb-border);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
   }
 
   .bottom-actions.expanded {
     flex-direction: row;
     justify-content: center;
     gap: 0.5rem;
-    padding: 1.25rem 1rem;
+    padding: 1rem;
   }
   
   /* --- Animations --- */
   @keyframes fadeInSlide {
-    from { opacity: 0; transform: translateX(-12px); }
+    from { opacity: 0; transform: translateX(-8px); }
     to { opacity: 1; transform: translateX(0); }
   }
 
@@ -805,11 +753,11 @@
   .history-list::-webkit-scrollbar { width: 4px; }
   .history-list::-webkit-scrollbar-track { background: transparent; }
   .history-list::-webkit-scrollbar-thumb { 
-    background: var(--border-color); 
+    background: var(--sb-border); 
     border-radius: 2px;
   }
   .history-list::-webkit-scrollbar-thumb:hover { 
-    background: var(--text-muted); 
+    background: var(--sb-text-muted); 
   }
 
   /* --- Responsive --- */
