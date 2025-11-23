@@ -3,7 +3,7 @@
   import { renderMarkdown } from '../lib/markdown';
   import { renderMath } from '../lib/katex';
   import { SimpleCodeParser, type ContentSegment } from '../lib/simple-code-parser';
-  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search, FileImage, FileText, FileCode, FileAudio, FileVideo, File as FileIcon } from 'lucide-svelte';
+  import { User, Bot, Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, AlertTriangle, Search, FileImage, FileText, FileCode, FileAudio, FileVideo, File as FileIcon, Info } from 'lucide-svelte';
   import type { ChatMessage } from '../stores/chat';
   import { parseUserMessage, type UserMessageSegment } from '../lib/user-message-parser';
   import { chatStore } from '../stores/chat';
@@ -448,8 +448,13 @@
       {/if}
     </div>
     {#if isLastAiMessage}
-      <div class="disclaimer-text" transition:fly="{{ y: 10, duration: 500 }}">
-        Please verify important info.
+      <div class="disclaimer-wrapper">
+        <div class="disclaimer-icon">
+          <Info size={14} strokeWidth={1.5} />
+        </div>
+        <div class="disclaimer-text typing-animation">
+          I might slip up—double-check the facts!
+        </div>
       </div>
     {/if}
   </div>
@@ -468,7 +473,56 @@
   .actions-and-disclaimer { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
   .message-actions { display: flex; align-items: center; gap: 0.5rem; }
   .interrupted-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); margin-left: auto; font-style: italic; padding: 0.25rem 0.5rem; border-radius: 6px; background-color: var(--hover-color); }
-  .disclaimer-text { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+  
+  .disclaimer-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0;
+    animation: fadeInUp 0.6s ease forwards 0.3s;
+  }
+  
+  .disclaimer-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+  
+  .disclaimer-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  
+  .typing-animation {
+    display: inline-block;
+    width: 0;
+    animation: typing 1.5s steps(38) 0.8s forwards;
+  }
+  
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
   .token-count { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.5rem; }
   .action-btn { background: none; border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all 0.2s ease; }
   .action-btn:hover:not(:disabled) { background: var(--hover-color); color: var(--text-color); border-color: var(--primary-color); }

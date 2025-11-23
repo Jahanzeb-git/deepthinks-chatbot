@@ -69,7 +69,7 @@
     <div class="search-info">
       {#if isLoading && domains.length > 0}
         <span class="search-label animated">
-          Searched <span class="domain-animation">{domains[currentDomainIndex]}</span>
+          Searching <span class="domain-animation typing-effect" key={currentDomainIndex}>{domains[currentDomainIndex]}</span>
         </span>
       {:else if isLoading}
         <span class="search-label">Searching the web...</span>
@@ -110,13 +110,21 @@
 </div>
 
 <style>
+  /* Warm Editorial Design System */
   .web-search-container {
     margin: 0.75rem 0;
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 12px;
     overflow: hidden;
-    background: var(--surface-color);
+    background: transparent;
     width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    transition: all 0.3s ease;
+  }
+
+  :global([data-theme="dark"]) .web-search-container {
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
   
   .search-header {
@@ -124,11 +132,11 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.85rem 1rem;
+    padding: 1rem 1.25rem;
     background: transparent;
     border: none;
     cursor: default;
-    transition: background-color 0.2s ease;
+    transition: all 0.2s ease;
     text-align: left;
   }
   
@@ -137,7 +145,11 @@
   }
   
   .search-header.clickable:hover {
-    background: var(--hover-color);
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  :global([data-theme="dark"]) .search-header.clickable:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
   
   .search-icon {
@@ -145,6 +157,7 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
+    opacity: 0.8;
   }
   
   .search-info {
@@ -158,31 +171,43 @@
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-color);
-    line-height: 1.4;
+    line-height: 1.5;
+    font-family: 'Inter', system-ui, sans-serif;
   }
   
   .search-label.animated {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
   }
   
   .domain-animation {
     color: var(--primary-color);
     font-weight: 600;
-    animation: fadeSlide 0.4s ease-in-out;
     display: inline-block;
+  }
+
+  .typing-effect {
+    animation: fadeSlide 0.4s ease-in-out, typing 0.8s steps(30) forwards;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 0;
   }
   
   @keyframes fadeSlide {
     0% {
       opacity: 0;
-      transform: translateY(-4px);
+      transform: translateY(-3px);
     }
     100% {
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  @keyframes typing {
+    from { max-width: 0; }
+    to { max-width: 300px; }
   }
   
   .expand-icon {
@@ -190,7 +215,8 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    transition: transform 0.2s ease;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.6;
   }
   
   .expand-icon.rotated {
@@ -198,19 +224,28 @@
   }
   
   .search-results {
-    border-top: 1px solid var(--border-color);
-    background: var(--background-color);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(0, 0, 0, 0.01);
+  }
+
+  :global([data-theme="dark"]) .search-results {
+    border-top-color: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
   }
   
   .result-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
+    gap: 0.875rem;
+    padding: 0.875rem 1.25rem;
     text-decoration: none;
     color: inherit;
-    transition: background-color 0.2s ease;
-    border-bottom: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  }
+
+  :global([data-theme="dark"]) .result-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
   }
   
   .result-item:last-child {
@@ -218,22 +253,28 @@
   }
   
   .result-item:hover {
-    background: var(--hover-color);
+    background: rgba(0, 0, 0, 0.02);
+    transform: translateX(2px);
+  }
+
+  :global([data-theme="dark"]) .result-item:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
   
   .result-number {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
-    min-width: 20px;
+    min-width: 22px;
     text-align: center;
+    opacity: 0.5;
   }
   
   .result-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.25rem;
     min-width: 0;
   }
   
@@ -246,7 +287,7 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    line-height: 1.4;
+    line-height: 1.5;
   }
   
   .result-domain {
@@ -255,10 +296,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    opacity: 0.7;
   }
   
   .result-item :global(.external-icon) {
     color: var(--text-muted);
     flex-shrink: 0;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+  }
+
+  .result-item:hover :global(.external-icon) {
+    opacity: 0.7;
   }
 </style>
