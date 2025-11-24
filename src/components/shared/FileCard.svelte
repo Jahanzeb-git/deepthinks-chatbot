@@ -40,21 +40,25 @@
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.5rem;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 14px;
-    background-color: var(--surface-color);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 12px;
+    background-color: transparent;
     margin: 0.75rem 0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.08);
-    transition: all 0.25s ease-out;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 72px;
     cursor: pointer;
+    width: 100%;
   }
 
   .file-card:hover,
-  .file-card.hovered {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.12);
-    background-color: rgba(var(--primary-rgb), 0.02);
-    transform: translateY(-1px);
+  .file-card.hovered:not(.active) {
+    background-color: rgba(0, 0, 0, 0.02);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .file-card.active {
+    border-color: rgba(var(--primary-rgb), 0.3);
+    background-color: rgba(var(--primary-rgb), 0.04);
   }
 
   .content-wrapper {
@@ -66,7 +70,7 @@
 
   .file-name {
     font-weight: 500;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     color: var(--text-color);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -74,16 +78,44 @@
     margin-bottom: 0.4rem;
   }
 
+  .tags-container {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
   .artifact-tag {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--primary-color);
-    background: rgba(var(--primary-rgb), 0.08);
-    padding: 2px 8px;
-    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.04);
+    padding: 3px 8px;
+    border-radius: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     width: fit-content;
+  }
+
+  .file-card.active .artifact-tag {
+    color: var(--primary-color);
+    background: rgba(var(--primary-rgb), 0.1);
+  }
+
+  .version-tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.04);
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: fit-content;
+  }
+
+  .file-card.active .version-tag {
+    color: #14b8a6;
+    background: rgba(20, 184, 166, 0.1);
   }
 
   .icon-wrapper {
@@ -95,59 +127,53 @@
   }
 
   .file-icon {
-    width: 54px;
-    height: 54px;
-    color: var(--primary-color);
-    transition: transform 0.25s ease, filter 0.25s ease;
+    width: 44px;
+    height: 44px;
+    color: var(--text-muted);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.6;
   }
 
   .file-card:hover .file-icon,
   .file-card.hovered .file-icon {
-    transform: scale(1.1) rotate(10deg);
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.12));
+    color: var(--primary-color);
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+
+  .file-card.active .file-icon {
+    color: var(--primary-color);
+    opacity: 1;
   }
 
   /* Dark mode adjustments */
   @media (prefers-color-scheme: dark) {
     .file-card {
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25);
     }
+
     .file-card:hover,
-    .file-card.hovered {
-      background-color: rgba(var(--primary-rgb), 0.05);
+    .file-card.hovered:not(.active) {
+      background-color: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.12);
     }
-  }
-  .file-card.active {
-    border: 1px solid #14b8a6; /* Teal outline */
-    background-color: rgba(20, 184, 166, 0.02);
-  }
-  .tags-container {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-  .version-tag {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: #14b8a6; /* Teal color */
-    background: rgba(20, 184, 166, 0.08);
-    padding: 2px 8px;
-    border-radius: 9999px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    width: fit-content;
-  }
-  /* Dark mode adjustments */
-  @media (prefers-color-scheme: dark) {
+
     .file-card.active {
-      border: 1px solid #5eead4; /* Lighter teal for dark mode */
-      background-color: rgba(94, 234, 212, 0.05);
+      border-color: rgba(var(--primary-rgb), 0.4);
+      background-color: rgba(var(--primary-rgb), 0.06);
     }
-  
+
+    .artifact-tag {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
     .version-tag {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .file-card.active .version-tag {
       color: #5eead4;
-      background: rgba(94, 234, 212, 0.08);
+      background: rgba(94, 234, 212, 0.12);
     }
   }
 </style>
