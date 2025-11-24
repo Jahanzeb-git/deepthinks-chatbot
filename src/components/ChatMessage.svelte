@@ -12,6 +12,7 @@
   import WebSearchUI from './shared/WebSearchUI.svelte';
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
+  import TokenizedMarkdown from './shared/TokenizedMarkdown.svelte';
   import { fly } from 'svelte/transition';
   import hljs from 'highlight.js';
 
@@ -74,24 +75,8 @@
 
   $: contentParts = message ? message.content.split('<--tool-call-->') : [''];
 
-  // Parse streaming content - key fix: only parse the LAST part (actively streaming)
-  $: if (message && message.type === 'ai' && message.mode !== 'code') {
-    // Initialize parser on first run
-    if (!parser) {
-      parser = new SimpleCodeParser();
-    }
-    
-    // Get the actively streaming part (last part after tool calls)
-    const currentPart = contentParts[contentParts.length - 1];
-    
-    // Parse it - parser maintains state and returns SAME array reference
-    segments = parser.parse(currentPart);
-    
-    // Reset parser when message is complete
-    if (!message.isStreaming) {
-      parser.reset();
-    }
-  }
+  // Parse streaming content - logic removed as TokenizedMarkdown handles it
+  // We just need contentParts to be reactive
 
   // Cleanup
   onDestroy(() => {
@@ -383,12 +368,12 @@
           {/each}
         </div>
       {:else}
-        <!-- DEFAULT MODE: Segment-based rendering with stable CodeBlock components -->
+        <!-- DEFAULT MODE: TokenizedMarkdown rendering -->
         <div class="ai-message" use:enhanceContent>
           {#each contentParts as part, partIdx}
             {#if partIdx < contentParts.length - 1}
-              <!-- Completed parts before tool calls - use standard markdown -->
-              {@html renderMarkdown(part)}
+              <!-- Completed parts before tool calls -->
+              <TokenizedMarkdown content={part} isStreaming={false} />
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
                 <WebSearchUI 
@@ -398,18 +383,11 @@
                 />
               {/if}
             {:else}
-              <!-- Current streaming part - use segment-based rendering -->
-              {#each segments as segment (segment.id)}
-                {#if segment.type === 'text'}
-                  {@html renderMarkdown(segment.content)}
-                {:else if segment.type === 'code'}
-                  <CodeBlock 
-                    code={segment.content} 
-                    language={segment.language || ''} 
-                    inline={false}
-                  />
-                {:else if segment.type === 'inline-code'}<CodeBlock code={segment.content} language="" inline={true} />{/if}
-              {/each}
+              <!-- Current streaming part -->
+              <TokenizedMarkdown 
+                content={part} 
+                isStreaming={message.isStreaming} 
+              />
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
                 <WebSearchUI 
