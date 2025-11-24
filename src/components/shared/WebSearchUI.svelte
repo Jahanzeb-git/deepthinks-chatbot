@@ -9,9 +9,7 @@
   
   let isExpanded = false;
   let currentDomainIndex = 0;
-  let animationInterval: any = null;
   let showAnimation = false;
-  let animationTimeout: any = null;
   
   $: domains = urls.map(u => getDomain(u.url));
   $: hasResults = urls.length > 0;
@@ -35,36 +33,24 @@
   // Start domain animation when we have domains
   $: if (domains.length > 0 && !showAnimation) {
     startAnimation();
-  } else if (domains.length === 0) {
+  }
+
+  async function startAnimation() {
+    if (showAnimation) return;
+    
+    showAnimation = true;
+    
+    // Iterate through all domains exactly once
+    for (let i = 0; i < domains.length; i++) {
+      currentDomainIndex = i;
+      // Wait for typing animation (1s) + reading time (1s)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
     stopAnimation();
   }
   
-  function startAnimation() {
-    if (animationInterval) return;
-    
-    showAnimation = true;
-    currentDomainIndex = 0;
-    
-    animationInterval = setInterval(() => {
-      currentDomainIndex = (currentDomainIndex + 1) % domains.length;
-    }, 2000); // Change domain every 2 seconds
-    
-    // Stop animation after showing all domains exactly once + typing time for last domain
-    const duration = (domains.length * 2000) + 1500; // 2s per domain + 1.5s for last typing
-    animationTimeout = setTimeout(() => {
-      stopAnimation();
-    }, duration);
-  }
-  
   function stopAnimation() {
-    if (animationInterval) {
-      clearInterval(animationInterval);
-      animationInterval = null;
-    }
-    if (animationTimeout) {
-      clearTimeout(animationTimeout);
-      animationTimeout = null;
-    }
     showAnimation = false;
   }
   
@@ -79,7 +65,7 @@
     on:click={toggleExpand}
     class:clickable={canExpand}
   >
-    <div class="search-icon">
+    <div class="search-icon" class:rotating={showAnimation || isLoading}>
       <Globe size={18} />
     </div>
     <div class="search-info">
@@ -169,11 +155,24 @@
   }
   
   .search-icon {
-    color: var(--primary-color);
+    color: rgba(0, 0, 0, 0.5);
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    opacity: 0.8;
+    transition: color 0.3s ease;
+  }
+
+  :global([data-theme="dark"]) .search-icon {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .search-icon.rotating {
+    animation: spin 3s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
   
   .search-info {
@@ -204,16 +203,17 @@
   }
 
   .typing-effect {
-    animation: typing 1.2s steps(40) forwards;
+    animation: typing 1s steps(30, end) forwards;
     overflow: hidden;
     white-space: nowrap;
     max-width: 0;
     display: inline-block;
+    vertical-align: bottom;
   }
   
   @keyframes typing {
     from { max-width: 0; }
-    to { max-width: 300px; }
+    to { max-width: 100%; }
   }
 
   /* Animated loading dots */
