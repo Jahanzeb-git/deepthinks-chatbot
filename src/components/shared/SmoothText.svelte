@@ -54,14 +54,14 @@
 
 <style>
   .fade-in {
-    animation: fadeIn 0.15s ease-out forwards;
+    animation: fadeIn 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     opacity: 0;
   }
 
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(2px);
+      transform: translateY(3px);
     }
     to {
       opacity: 1;
