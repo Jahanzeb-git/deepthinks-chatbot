@@ -90,8 +90,12 @@
     flex-grow: 1;
     overflow-y: auto;
     padding: 2rem;
-    background: var(--background-color);
+    background: var(--sb-bg, #F9F8F6);
     transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  :global([data-theme="dark"]) .chat-container {
+    background: var(--sb-bg, #1C1B1A);
   }
 
   .shared-view-info {

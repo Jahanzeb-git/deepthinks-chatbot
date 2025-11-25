@@ -699,6 +699,18 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     --primary-color: #667eea;         /* Main brand color */
     --primary-hover: #5a6fd8;         /* Brand color on hover */
     --primary-color-translucent: rgba(102, 126, 234, 0.1);
+
+    /* Sidebar Warm Editorial Theme - Light Mode */
+    --sb-bg: #F9F8F6;
+    --sb-text: #2C2C2C;
+    --sb-text-muted: #787570;
+    --sb-border: rgba(0, 0, 0, 0.04);
+    --sb-hover: rgba(44, 44, 44, 0.04);
+    --sb-active-bg: #EBE9E5;
+    --sb-accent: #667eea;
+    --sb-accent-muted: rgba(102, 126, 234, 0.08);
+    --sb-font-serif: "Merriweather", "Georgia", serif;
+    --sb-font-sans: "Inter", system-ui, sans-serif;
   }
   
   :global([data-theme="dark"]) {
@@ -712,6 +724,15 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     --primary-color: #667eea;
     --primary-hover: #5a6fd8;
     --primary-color-translucent: rgba(102, 126, 234, 0.2);
+
+    /* Sidebar Warm Editorial Theme - Dark Mode */
+    --sb-bg: #1C1B1A;
+    --sb-text: #E6E4E0;
+    --sb-text-muted: #9C9A96;
+    --sb-border: rgba(255, 255, 255, 0.04);
+    --sb-hover: rgba(255, 255, 255, 0.04);
+    --sb-active-bg: #2A2928;
+    --sb-accent-muted: rgba(102, 126, 234, 0.15);
   }
   
   :global(*) {
@@ -729,7 +750,7 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
   
   .app {
     min-height: 100vh;
-    background: var(--background-color);
+    background: var(--sb-bg, #F9F8F6);
     --current-sidebar-width: var(--sidebar-collapsed-width);
   }
   
