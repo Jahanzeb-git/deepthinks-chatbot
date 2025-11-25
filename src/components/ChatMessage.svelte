@@ -338,6 +338,7 @@
                       filename={block.file.fileName}
                       version={block.file.fileVersion}
                       isActive={activeFileKey === `${block.file.fileName}_v${block.file.fileVersion || 'undefined'}`}
+                      isLoading={message.isStreaming && blockIdx === codeBlocks.length - 1}
                     />
                   </button>
                 {/if}
@@ -446,7 +447,7 @@
   .user .message-avatar { background: var(--primary-color); color: white; }
   .message-container.ai { gap: 0; }
   .message-content { flex: 1; min-width: 0; text-align: left; }
-  .user-message { background: var(--surface-color); color: var(--text-color); padding: 0.75rem 1rem; border-radius: 18px 18px 4px 18px; font-weight: 500; word-wrap: break-word; display: inline-block; max-width: 100%; font-family: 'Nunito', sans-serif; }
+  .user-message { background: var(--user-bubble-bg); color: var(--text-color); padding: 0.75rem 1rem; border-radius: 18px 18px 4px 18px; font-weight: 500; word-wrap: break-word; display: inline-block; max-width: 100%; font-family: 'Nunito', sans-serif; }
   .ai-message, .code-message { font-family: 'Nunito', sans-serif; line-height: 1.6; color: var(--text-color); word-wrap: break-word; max-width: 100%; text-align: left; }
   .actions-and-disclaimer { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; margin-bottom: 1.5rem; padding-top: 0.5rem; }
   .message-actions { display: flex; align-items: center; gap: 0.5rem; }
@@ -678,6 +679,6 @@
   }
 
   .user-code {
-    background: var(--surface-color) !important;  /* make code block match bubble */
+    background: var(--user-bubble-bg) !important;  /* make code block match bubble */
   }
 </style>

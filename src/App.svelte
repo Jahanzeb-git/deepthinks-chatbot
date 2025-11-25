@@ -700,11 +700,15 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     --primary-hover: #5a6fd8;         /* Brand color on hover */
     --primary-color-translucent: rgba(102, 126, 234, 0.1);
 
+    /* Specific Component Backgrounds - Light Mode */
+    --user-bubble-bg: #EBE9E5;        /* Brownish, slightly darkened */
+    --chat-input-bg: #E2E0DC;         /* Brownish, darker than user bubble */
+
     /* Sidebar Warm Editorial Theme - Light Mode */
     --sb-bg: #F9F8F6;
     --sb-text: #2C2C2C;
     --sb-text-muted: #787570;
-    --sb-border: rgba(0, 0, 0, 0.04);
+    --sb-border: rgba(0, 0, 0, 0.08);
     --sb-hover: rgba(44, 44, 44, 0.04);
     --sb-active-bg: #EBE9E5;
     --sb-accent: #667eea;
@@ -725,11 +729,15 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     --primary-hover: #5a6fd8;
     --primary-color-translucent: rgba(102, 126, 234, 0.2);
 
+    /* Specific Component Backgrounds - Dark Mode (Keep as is) */
+    --user-bubble-bg: var(--surface-color);
+    --chat-input-bg: var(--surface-color);
+
     /* Sidebar Warm Editorial Theme - Dark Mode */
     --sb-bg: #1C1B1A;
     --sb-text: #E6E4E0;
     --sb-text-muted: #9C9A96;
-    --sb-border: rgba(255, 255, 255, 0.04);
+    --sb-border: rgba(255, 255, 255, 0.08);
     --sb-hover: rgba(255, 255, 255, 0.04);
     --sb-active-bg: #2A2928;
     --sb-accent-muted: rgba(102, 126, 234, 0.15);

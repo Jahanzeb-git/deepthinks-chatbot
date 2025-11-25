@@ -517,7 +517,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    background: var(--surface-color, #ffffff);
+    background: var(--chat-input-bg, #ffffff);
     border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 24px;
     padding: 12px 16px;
@@ -721,7 +721,7 @@
   .send-button {
     width: 32px;
     height: 32px;
-    background: var(--primary-color);
+    background: #2C2520; /* Dark burned brownish */
     border: none;
     border-radius: 16px;
     color: white;
@@ -735,7 +735,7 @@
   }
 
   .send-button:hover:not(:disabled) {
-    background: var(--primary-hover);
+    background: #3E352F;
   }
 
   .send-button:active:not(:disabled) {
@@ -745,6 +745,15 @@
   .send-button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  :global([data-theme="dark"]) .send-button {
+    background: #E6E4E0;
+    color: #1C1B1A;
+  }
+
+  :global([data-theme="dark"]) .send-button:hover:not(:disabled) {
+    background: #D1D1CF;
   }
 
   .tooltip-wrapper {

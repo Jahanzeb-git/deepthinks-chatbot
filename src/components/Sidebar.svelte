@@ -345,7 +345,7 @@
     --sb-bg: #F9F8F6;
     --sb-text: #2C2C2C;
     --sb-text-muted: #787570;
-    --sb-border: rgba(0, 0, 0, 0.04);
+    --sb-border: rgba(255, 255, 255, 0.08);
     --sb-hover: rgba(44, 44, 44, 0.04);
     --sb-active-bg: #EBE9E5;
     --sb-accent: #667eea; /* Keeping brand color but using it subtly */
