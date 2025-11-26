@@ -14,16 +14,19 @@
   let lastTextLength = 0;
   let chunkIdCounter = 0;
 
+  // Safely get text or fallback to empty string
+  $: safeText = text ?? '';
+
   // Reset chunks if text completely changes (not an append)
-  $: if (text.length < lastTextLength || !text.startsWith(chunks.map(c => c.content).join(''))) {
-    chunks = [{ id: chunkIdCounter++, content: text, isNew: false }];
-    lastTextLength = text.length;
-  } else if (text.length > lastTextLength) {
+  $: if (safeText.length < lastTextLength || !safeText.startsWith(chunks.map(c => c.content).join(''))) {
+    chunks = [{ id: chunkIdCounter++, content: safeText, isNew: false }];
+    lastTextLength = safeText.length;
+  } else if (safeText.length > lastTextLength) {
     // It's an append!
-    const newContent = text.slice(lastTextLength);
+    const newContent = safeText.slice(lastTextLength);
     if (newContent) {
       chunks = [...chunks, { id: chunkIdCounter++, content: newContent, isNew: true }];
-      lastTextLength = text.length;
+      lastTextLength = safeText.length;
     }
   }
 

@@ -28,28 +28,22 @@
   .file-card {
     display: flex;
     align-items: center;
-    justify-content: space-between; /* Space out content */
+    justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.25rem; /* Restore padding for height */
+    padding: 1rem 1.25rem;
     border: 1px solid var(--border-color);
-    border-radius: 12px; /* Restore rounded corners */
-    background: #EBE9E5; /* Darker subtle background for light theme */
+    border-radius: 12px;
+    background: #EBE9E5;
     cursor: pointer;
     transition: all 0.2s ease;
-    width: 100%; /* Full width */
-    min-height: 72px; /* Restore height */
+    width: 100%;
+    min-height: 72px;
     user-select: none;
     position: relative;
   }
 
   .file-card:hover {
-    background: var(--hover-color);
-    border-color: var(--primary-color);
-  }
-
-  .file-card.active {
-    border-color: var(--primary-color);
-    background: var(--primary-color-translucent);
+    border-color: #a19e98ff;
   }
 
   .icon {

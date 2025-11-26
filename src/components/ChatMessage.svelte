@@ -320,7 +320,10 @@
         <div class="code-message" use:enhanceContent>
           {#each codeBlocks as block, blockIdx (block.id)}
             {#if block.type === 'text'}
-              <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
+              <TokenizedMarkdown 
+                content={block.content} 
+                isStreaming={message.isStreaming && blockIdx === codeBlocks.length - 1} 
+              />
         
               {#each codeModeToolCalls.filter(tc => tc.position === 'after_text') as toolCall}
                 <WebSearchUI 
@@ -364,7 +367,10 @@
                 />
               {/each}
         
-              <div class="markdown-content">{@html renderMarkdown(block.content)}</div>
+              <TokenizedMarkdown 
+                content={block.content} 
+                isStreaming={message.isStreaming && blockIdx === codeBlocks.length - 1} 
+              />
             {/if}
           {/each}
         </div>
@@ -511,6 +517,10 @@
   .file-block { margin: 0.5rem 0; }
   .file-card-button { background: none; border: none; padding: 0; cursor: pointer; display: block; width: 100%; text-align: left; }
   .file-text { padding: 0.5rem; margin-top: 0.5rem; background: var(--surface-color); border-radius: 8px; }
+  /* Light mode: darker creamish background for file-text */
+  :global(:root:not([data-theme="dark"])) .file-text {
+    background: #F2F0ED;
+  }
   @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
   .file-attachments {
@@ -612,6 +622,8 @@
     display: block;
     margin-bottom: 1rem;
   }
+
+  
 
   .user-code-block {
     margin: 0.75rem 0;

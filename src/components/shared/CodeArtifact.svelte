@@ -410,6 +410,7 @@
     height: 100%;
     box-sizing: border-box;
     display: block;
+    background-color: var(--background-color) !important;
   }
 
   .cursor {
