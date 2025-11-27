@@ -18,6 +18,7 @@
   import { generateSessionId } from './lib/utils';
   import { derived, get } from 'svelte/store';
   import { StreamProcessor } from './lib/stream-processor';
+  import { shouldShowBootUI, updateLastChatRequestTime, CONTAINER_CONFIG } from './stores/containerTimer';
 
   import Sidebar from './components/Sidebar.svelte';
   import ChatContainer from './components/ChatContainer.svelte';
@@ -32,6 +33,7 @@
   import Welcome from './components/presentation/Welcome.svelte';
   import PromptSuggestions from './components/presentation/PromptSuggestions.svelte';
   import CustomLoading from './components/CustomLoading.svelte';
+  import BootingContainer from './components/BootingContainer.svelte';
   import AuthButton from './components/AuthButton.svelte';
   import CodeArtifact from './components/shared/CodeArtifact.svelte';
 
@@ -45,6 +47,10 @@
   let authMode: 'signup' | 'login' = 'signup';
   let unauthenticatedSessionId = '';
   let abortController: AbortController | null = null;
+  
+  // Boot UI state
+  let showBootUIFullscreen = false;
+  let showBootUIInline = false;
   
   $: theme = $themeStore;
   $: isInitialState = $chatStore.isInitialState;
@@ -79,6 +85,19 @@
   }
   
   onMount(async () => {
+    // Check machine state IMMEDIATELY on app load
+    try {
+      const { needsBoot } = await api.checkMachineState();
+      if (needsBoot) {
+        showBootUIFullscreen = true;
+        // Wait for 6 seconds before continuing
+        await new Promise(resolve => setTimeout(resolve, 6000));
+        showBootUIFullscreen = false;
+      }
+    } catch (error) {
+      console.error('Failed to check machine state on mount:', error);
+    }
+
     await authStore.initializeFromStorage();
     settingsStore.initialize();
     sessionUuidStore.initializeFromStorage();
@@ -91,6 +110,10 @@
     mediaQuery.addEventListener('change', (e) => isMobile = e.matches);
 
     await handlePathChange();
+    
+    // Initialize timer so inactivity tracking starts from app load
+    updateLastChatRequestTime();
+    
     initializeApp();
   });
 
@@ -292,10 +315,25 @@ async function pollSearchWebUrls(messageId: string, sessionNumber: number) {
 }
   
 async function submitPrompt(message: string, reason: 'default' | 'reason' | 'code' = 'default') {
-    abortController = new AbortController();
+    // Check timer to see if we need boot UI
+    const needsBoot = shouldShowBootUI();
     
+    // Start AI response IMMEDIATELY - no delay
+    abortController = new AbortController();
     const model = reason === 'code' ? 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8' : reason === 'reason' ? 'Reasoning' : 'Default';
     const messageId = chatStore.startAIResponse(model, reason);
+    
+    // Show boot UI if needed (timer-based, not API call)
+    if (needsBoot) {
+      showBootUIInline = true;
+      // Boot UI will auto-hide after 6 seconds via component logic
+      setTimeout(() => {
+        showBootUIInline = false;
+      }, CONTAINER_CONFIG.BOOT_DURATION);
+    }
+    
+    // Update timer for next request
+    updateLastChatRequestTime();
 
     // Start polling for search URLs if authenticated...
     let searchPollInterval: any = null;
@@ -598,7 +636,11 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
         </div>
       {:else}
 
-        <ChatContainer isSharedView={isSharedView} on:regenerate={handleRegenerate} />
+        <ChatContainer 
+          isSharedView={isSharedView} 
+          showBootUI={showBootUIInline}
+          on:regenerate={handleRegenerate} 
+        />
         <ChatInput disabled={isSharedView} on:submit={handleChatSubmit} on:interrupt={handleInterrupt} />
       {/if}
     </div>
@@ -644,6 +686,14 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     {/if}
     {#if $isSidebarExpanded && isMobile}
       <div class="mobile-sidebar-backdrop" on:click={toggleSidebar} />
+    {/if}
+
+    {#if showBootUIFullscreen}
+      <BootingContainer 
+        mode="fullscreen" 
+        showBootCountdown={true}
+        onComplete={() => {}} 
+      />
     {/if}
   </main>
 {/if}

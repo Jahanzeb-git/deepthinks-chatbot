@@ -3,10 +3,12 @@
   import { chatStore } from '../stores/chat';
   import ChatMessage from './ChatMessage.svelte';
   import CustomLoading from './CustomLoading.svelte';
+  import BootingContainer from './BootingContainer.svelte';
 
   import { Info } from 'lucide-svelte';
   
   export let isSharedView = false;
+  export let showBootUI = false;
 
   let chatContainer: HTMLDivElement;
   let shouldAutoScroll = true;
@@ -79,6 +81,19 @@
           <div class="message-avatar ai">
             <CustomLoading />
           </div>
+          {#if showBootUI}
+            <BootingContainer 
+              mode="inline" 
+              showBootCountdown={true}
+              onComplete={() => {}} 
+            />
+          {:else}
+            <BootingContainer 
+              mode="inline" 
+              showBootCountdown={false}
+              onComplete={() => {}} 
+            />
+          {/if}
         </div>
       {/if}
     </div>

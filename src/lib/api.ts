@@ -35,7 +35,7 @@ async function makeRequest(endpoint: string, options: RequestInit = {}) {
   if (response.status === 200 && options.method === 'PATCH') {
     return response.json().catch(() => ({}));
   }
-  
+
   if (response.status === 201) {
     return response.json();
   }
@@ -90,9 +90,9 @@ export const api = {
 
   // Chat
   async sendMessage(
-    sessionId: string, 
-    query: string, 
-    reason: 'default' | 'reason' | 'code' = 'default', 
+    sessionId: string,
+    query: string,
+    reason: 'default' | 'reason' | 'code' = 'default',
     signal: AbortSignal,
     onData: (data: { token: string, trace: boolean }) => void,
     onEnd: () => void,
@@ -136,7 +136,7 @@ export const api = {
         if (done) {
           break;
         }
-        
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
         buffer = lines.pop() || '';
@@ -187,7 +187,7 @@ export const api = {
     return makeRequest('/settings');
   },
 
-  async updateSettings(settings: Partial<UserSettings & { theme: string }> ) {
+  async updateSettings(settings: Partial<UserSettings & { theme: string }>) {
     return makeRequest('/settings', {
       method: 'PATCH',
       body: JSON.stringify(settings)
@@ -331,5 +331,33 @@ export const api = {
   async getSearchWebUrls(sessionNumber: number, active: boolean = true) {
     const params = new URLSearchParams({ active: active.toString() });
     return makeRequest(`/search-web-urls/${sessionNumber}?${params.toString()}`);
+  },
+
+  // Machine Status Check (Netlify Function)
+  async checkMachineState(): Promise<{ needsBoot: boolean; state: string }> {
+    const NETLIFY_FUNCTION_URL = '/.netlify/functions/machine-status';
+
+    try {
+      const response = await fetch(NETLIFY_FUNCTION_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error('Failed to check machine state:', response.status);
+        return { needsBoot: false, state: 'unknown' };
+      }
+
+      const data = await response.json();
+      return {
+        needsBoot: data.needsBoot || false,
+        state: data.state || 'unknown',
+      };
+    } catch (error) {
+      console.error('Error checking machine state:', error);
+      return { needsBoot: false, state: 'unknown' };
+    }
   },
 };
