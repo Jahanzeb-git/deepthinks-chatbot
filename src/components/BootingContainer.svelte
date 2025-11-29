@@ -6,7 +6,7 @@
   export let showBootCountdown: boolean = true; // Whether to show boot countdown
   export let onComplete: () => void = () => {};
   
-  let timeLeft = 6;
+  let timeLeft = 10;
   let mounted = false;
   let bootPhaseComplete = false;
   let currentLoadingText = '';
@@ -26,7 +26,7 @@
   let currentTextIndex = 0;
   
   function startBootCountdown() {
-    timeLeft = 6;
+    timeLeft = 10;
     countdownInterval = setInterval(() => {
       timeLeft--;
       if (timeLeft <= 0) {
