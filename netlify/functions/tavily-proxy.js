@@ -43,6 +43,7 @@ exports.handler = async function (event, context) {
         const data = await response.json();
 
         // Return the exact Tavily response structure
+        // TODO: Add rate limiting to prevent abuse
         return {
             statusCode: 200,
             headers: {
