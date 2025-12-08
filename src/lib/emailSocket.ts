@@ -95,8 +95,11 @@ export function connectEmailSocket(): void {
 
     // Gmail authentication needed
     socket.on('email_tool_needs_auth', (data: { message: string }) => {
-        console.log('Email tool needs auth:', data.message);
+        console.log('🔔 EVENT RECEIVED: email_tool_needs_auth');
+        console.log('📨 Data:', data);
+        console.log('➡️ Calling emailToolStore.setNeedsAuth(true, message)');
         emailToolStore.setNeedsAuth(true, data.message);
+        console.log('✅ setNeedsAuth called');
     });
 
     // Progress updates

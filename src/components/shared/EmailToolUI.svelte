@@ -15,6 +15,14 @@
 
   $: state = $emailToolStore;
   
+  // Log state changes for debugging  
+  $: {
+    console.log('🎨 UI: EmailToolStore state changed:');
+    console.log('  - needsAuth:', state.needsAuth);
+    console.log('  - isActive:', state.isActive);
+    console.log('  - error:', state.error);
+  }
+  
   // Typing animation effect for reasoning
   $: if (state.reasoning !== targetReasoning) {
     targetReasoning = state.reasoning;

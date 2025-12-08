@@ -80,12 +80,19 @@ function createEmailToolStore() {
          * Set auth needed state
          */
         setNeedsAuth: (needsAuth: boolean, message: string | null) => {
-            update(state => ({
-                ...state,
-                needsAuth,
-                authMessage: message,
-                error: needsAuth ? null : state.error, // Clear error when showing auth
-            }));
+            console.log('📦 STORE: setNeedsAuth invoked');
+            console.log('📦 Parameters:', { needsAuth, message });
+            update(state => {
+                const newState = {
+                    ...state,
+                    needsAuth,
+                    authMessage: message,
+                    error: needsAuth ? null : state.error,
+                };
+                console.log('📦 Old state:', { needsAuth: state.needsAuth, isActive: state.isActive });
+                console.log('📦 New state:', { needsAuth: newState.needsAuth, isActive: newState.isActive });
+                return newState;
+            });
         },
 
         /**
