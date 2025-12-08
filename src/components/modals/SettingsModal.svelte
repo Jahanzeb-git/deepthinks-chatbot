@@ -8,7 +8,7 @@
   import { sessionStore } from '../../stores/session';
   import Modal from './Modal.svelte';
   import Toggle from '../shared/Toggle.svelte';
-  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info, FileText, FileCode, FileImage, Download } from 'lucide-svelte';
+  import { User, Bell, Database, KeyRound, BrainCircuit, X, AlertTriangle, Check, Trash2, Settings, ChevronRight, Shield, Sparkles, ChevronLeft, Info, FileText, FileCode, FileImage, Download, Mail, Unlink } from 'lucide-svelte';
   import DataControlModal from './DataControlModal.svelte';
   import { get } from 'svelte/store';
   import { tick, onMount } from 'svelte';
@@ -45,6 +45,12 @@
   let isDeletingChats = false;
   let deleteChatsSuccess: { deleted_sessions: number; deleted_files: number } | null = null;
 
+  // Gmail Connection State
+  let gmailConnected = false;
+  let gmailEmail: string | null = null;
+  let isLoadingGmailStatus = false;
+  let isDisconnectingGmail = false;
+  let gmailError: string | null = null;
 
   const sections = {
     General: { icon: User, description: 'Personalization & appearance' },
@@ -363,6 +369,67 @@
 	$: if (activeTab === 'Files' && $settingsStore.isSettingsModalOpen && filesData.length === 0 && !isLoadingFiles) {
   	loadFiles();
 	}
+
+  // Gmail connection functions
+  async function fetchGmailStatus() {
+    isLoadingGmailStatus = true;
+    gmailError = null;
+    try {
+      const response = await api.getGmailStatus();
+      gmailConnected = response.connected || false;
+      gmailEmail = response.email_address || null;
+    } catch (error: any) {
+      console.error('Failed to fetch Gmail status:', error);
+      gmailError = error.message || 'Failed to check Gmail status';
+      gmailConnected = false;
+    } finally {
+      isLoadingGmailStatus = false;
+    }
+  }
+
+  function handleConnectGmail() {
+    const sessionsRaw = localStorage.getItem('deepthinks_sessions');
+    const sessions = sessionsRaw ? JSON.parse(sessionsRaw) : [];
+    const sessionId = sessions.length > 0 ? sessions[0] : 0;
+    
+    const url = `https://chatbot-backend-wandering-shadow-534.fly.dev/auth/gmail/authorize?session_id=${sessionId}`;
+    const width = 500;
+    const height = 600;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    
+    const popup = window.open(
+      url,
+      'gmail-oauth',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    const checkClosed = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(checkClosed);
+        fetchGmailStatus();
+      }
+    }, 500);
+  }
+
+  async function handleDisconnectGmail() {
+    isDisconnectingGmail = true;
+    gmailError = null;
+    try {
+      await api.disconnectGmail();
+      gmailConnected = false;
+      gmailEmail = null;
+    } catch (error: any) {
+      console.error('Failed to disconnect Gmail:', error);
+      gmailError = error.message || 'Failed to disconnect Gmail';
+    } finally {
+      isDisconnectingGmail = false;
+    }
+  }
+
+  $: if (activeTab === 'Account' && $settingsStore.isSettingsModalOpen && !gmailConnected && !isLoadingGmailStatus) {
+    fetchGmailStatus();
+  }
 </script>
 
 <Modal
@@ -701,7 +768,56 @@
                     </div>
                   </div>
                 </div>
-
+                <div class="setting-card">
+                  <div class="setting-header">
+                    <div class="setting-icon">
+                      <Mail size={20} />
+                    </div>
+                    <div class="setting-info">
+                      <h4 class="setting-title">Gmail Connection</h4>
+                      <p class="setting-desc">Connect your Gmail to enable email features</p>
+                    </div>
+                  </div>
+                  <div class="setting-control full">
+                    {#if isLoadingGmailStatus}
+                      <div class="loading-state inline">
+                        <div class="spinner small"></div>
+                        <span>Checking status...</span>
+                      </div>
+                    {:else if gmailConnected}
+                      <div class="gmail-connected-info">
+                        <div class="gmail-email">
+                          <Check size={16} />
+                          <span>Connected as {gmailEmail}</span>
+                        </div>
+                        <button 
+                          class="action-btn danger"
+                          on:click={handleDisconnectGmail}
+                          disabled={isDisconnectingGmail}
+                        >
+                          {#if isDisconnectingGmail}
+                            <div class="spinner small"></div>
+                            Disconnecting...
+                          {:else}
+                            <Unlink size={16} />
+                            Disconnect
+                          {/if}
+                        </button>
+                      </div>
+                    {:else}
+                      <button 
+                        class="action-btn gmail"
+                        on:click={handleConnectGmail}
+                      >
+                        <Mail size={16} />
+                        Connect Gmail
+                      </button>
+                    {/if}
+                    {#if gmailError}
+                      <p class="api-feedback-message error">{gmailError}</p>
+                    {/if}
+                  </div>
+                </div>
                 <div class="setting-card">
                   <div class="setting-header">
                     <div class="setting-icon">
@@ -2007,5 +2123,41 @@
   .file-item-meta {
     flex-wrap: wrap;
   }
+}
+
+/* Gmail Connection Styles */
+.gmail-connected-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1rem;
+}
+
+.gmail-email {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #10b981;
+  font-size: 0.875rem;
+}
+
+.action-btn.gmail {
+  background: linear-gradient(135deg, #ea4335 0%, #d33426 100%);
+  color: white;
+  border: none;
+}
+
+.action-btn.gmail:hover {
+  background: linear-gradient(135deg, #d33426 0%, #c5291c 100%);
+  transform: translateY(-1px);
+}
+
+.loading-state.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 </style>

@@ -360,4 +360,14 @@ export const api = {
       return { needsBoot: false, state: 'unknown' };
     }
   },
+  // Gmail OAuth
+  async getGmailStatus(): Promise<{ connected: boolean; email_address?: string; connected_since?: string }> {
+    return makeRequest('/auth/gmail/status');
+  },
+
+  async disconnectGmail(): Promise<{ success: boolean; message: string }> {
+    return makeRequest('/auth/gmail/disconnect', {
+      method: 'POST'
+    });
+  },
 };

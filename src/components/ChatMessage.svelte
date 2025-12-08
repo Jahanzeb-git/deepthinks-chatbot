@@ -10,6 +10,7 @@
   import { artifactStore } from '../stores/artifact';
   import ReasoningBlock from './shared/ReasoningBlock.svelte';
   import WebSearchUI from './shared/WebSearchUI.svelte';
+  import EmailToolUI from './shared/EmailToolUI.svelte';
   import FileCard from './shared/FileCard.svelte';
   import CodeBlock from './shared/CodeBlock.svelte';
   import TokenizedMarkdown from './shared/TokenizedMarkdown.svelte';
@@ -383,11 +384,18 @@
               <TokenizedMarkdown content={part} isStreaming={false} />
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
-                <WebSearchUI 
-                  query={message.toolCalls[partIdx].query}
-                  urls={message.toolCalls[partIdx].urls || []}
-                  isLoading={message.toolCalls[partIdx].isLoading ?? true}
-                />
+                {#if message.toolCalls[partIdx].name === 'email_tool'}
+                  <EmailToolUI 
+                    query={message.toolCalls[partIdx].query}
+                    isActive={true}
+                  />
+                {:else}
+                  <WebSearchUI 
+                    query={message.toolCalls[partIdx].query}
+                    urls={message.toolCalls[partIdx].urls || []}
+                    isLoading={message.toolCalls[partIdx].isLoading ?? true}
+                  />
+                {/if}
               {/if}
             {:else}
               <!-- Current streaming part -->
@@ -397,11 +405,18 @@
               />
               
               {#if message.toolCalls && message.toolCalls[partIdx]}
-                <WebSearchUI 
-                  query={message.toolCalls[partIdx].query}
-                  urls={message.toolCalls[partIdx].urls || []}
-                  isLoading={message.toolCalls[partIdx].isLoading ?? true}
-                />  
+                {#if message.toolCalls[partIdx].name === 'email_tool'}
+                  <EmailToolUI 
+                    query={message.toolCalls[partIdx].query}
+                    isActive={true}
+                  />
+                {:else}
+                  <WebSearchUI 
+                    query={message.toolCalls[partIdx].query}
+                    urls={message.toolCalls[partIdx].urls || []}
+                    isLoading={message.toolCalls[partIdx].isLoading ?? true}
+                  />
+                {/if}
               {/if}
             {/if}
           {/each}

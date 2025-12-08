@@ -19,6 +19,8 @@
   import { derived, get } from 'svelte/store';
   import { StreamProcessor } from './lib/stream-processor';
   import { shouldShowBootUI, updateLastChatRequestTime, CONTAINER_CONFIG } from './stores/containerTimer';
+  import { connectEmailSocket, disconnectEmailSocket } from './lib/emailSocket';
+  import { emailToolStore } from './stores/emailTool';
 
   import Sidebar from './components/Sidebar.svelte';
   import ChatContainer from './components/ChatContainer.svelte';
@@ -113,6 +115,11 @@
     
     // Initialize timer so inactivity tracking starts from app load
     updateLastChatRequestTime();
+    
+    // Connect email socket if authenticated
+    if ($authStore.isAuthenticated) {
+      connectEmailSocket();
+    }
     
     initializeApp();
   });
@@ -432,6 +439,13 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
         try {
           const parsed = JSON.parse(jsonBuffer);
           if (parsed && parsed.tool_call === 'search_web' && parsed.query) {
+            chatStore.addToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
+            accumulatedContent += '<--tool-call-->';
+            isParsingJson = false;
+            jsonBuffer = '';
+          } else if (parsed && parsed.tool_call === 'email_tool' && parsed.query) {
+            // Start email tool and add to message
+            emailToolStore.start(messageId);
             chatStore.addToolCall(messageId, { name: parsed.tool_call, query: parsed.query });
             accumulatedContent += '<--tool-call-->';
             isParsingJson = false;
