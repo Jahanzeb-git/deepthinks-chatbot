@@ -84,6 +84,7 @@ function createEmailToolStore() {
                 ...state,
                 needsAuth,
                 authMessage: message,
+                error: needsAuth ? null : state.error, // Clear error when showing auth
             }));
         },
 
