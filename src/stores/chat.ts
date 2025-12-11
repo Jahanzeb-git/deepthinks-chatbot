@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 
 export interface CodeModeContent {
   Text?: string;
-  Files: Array<{ 
+  Files: Array<{
     FileName?: string;
     FileVersion?: number;
     FileCode?: string;
@@ -26,9 +26,9 @@ export interface ChatMessage {
     name: string;
     query: string;
     position?: 'after_text' | 'after_file' | 'before_conclusion';
-    fileIndex?: number; 
-    urls?: Array<{ title: string; url: string }>; 
-    isLoading?: boolean; 
+    fileIndex?: number;
+    urls?: Array<{ title: string; url: string }>;
+    isLoading?: boolean;
   }[];
 }
 
@@ -154,12 +154,12 @@ function createChatStore() {
       });
     },
 
-    addToolCall: (messageId: string, toolCall: { name: string; query: string; position?: string; fileIndex?: number  }) => {
+    addToolCall: (messageId: string, toolCall: { name: string; query: string; position?: string; fileIndex?: number }) => {
       update(state => ({
         ...state,
-        messages: state.messages.map(msg => 
-          msg.id === messageId 
-            ? { ...msg, toolCalls: [...(msg.toolCalls || []), {...toolCall, isLoading: true, urls: [] }] }
+        messages: state.messages.map(msg =>
+          msg.id === messageId
+            ? { ...msg, toolCalls: [...(msg.toolCalls || []), { ...toolCall, isLoading: true, urls: [] }] }
             : msg
         )
       }));
@@ -186,8 +186,8 @@ function createChatStore() {
     updateStreamingMessage: (messageId: string, content: string) => {
       update(state => ({
         ...state,
-        messages: state.messages.map(msg => 
-          msg.id === messageId 
+        messages: state.messages.map(msg =>
+          msg.id === messageId
             ? { ...msg, content }
             : msg
         )
@@ -200,9 +200,9 @@ function createChatStore() {
         messages: state.messages.map(msg => {
           if (msg.id === messageId) {
             const finalContent = msg.mode === 'code' && msg.codeModeContent ? JSON.stringify(msg.codeModeContent, null, 2) : msg.content;
-            return { 
-              ...msg, 
-              isStreaming: false, 
+            return {
+              ...msg,
+              isStreaming: false,
               tokenCount: tokenCount,
               content: finalContent
             };
@@ -257,8 +257,10 @@ function createChatStore() {
       }));
     },
 
-    loadSessionMessages: (messages: Array<{prompt: string, response: string, timestamp: string, files?: any[]}>) => {
+    loadSessionMessages: (messages: Array<{ prompt: string, response: string, timestamp: string, files?: any[], email_tool_call?: any, search_web_calls?: any[] }>): { [messageId: string]: any } => {
       const chatMessages: ChatMessage[] = [];
+      const emailToolDataMap: { [messageId: string]: any } = {}; // Map messageId -> email_tool_call data
+
       messages.forEach(msg => {
         let userContent = msg.prompt;
 
@@ -296,7 +298,7 @@ function createChatStore() {
         // STEP 1: First check if this is code mode
         try {
           const parsed = JSON.parse(msg.response);
-          if (parsed && typeof parsed === 'object' && 
+          if (parsed && typeof parsed === 'object' &&
             ('Files' in parsed || 'Conclusion' in parsed || 'Text' in parsed)) {
             // This is code mode content
             mode = 'code';
@@ -328,14 +330,14 @@ function createChatStore() {
             if (mode === 'code' && codeModeContent) {
               // Parse the response to find tool call positions
               const responseText = msg.response;
-      
+
               // Check if tool_after_text exists and matches this query
-              if (responseText.includes('"tool_after_text"') && 
+              if (responseText.includes('"tool_after_text"') &&
                 responseText.includes(`"query": "${searchCall.query}"`)) {
                 toolCall.position = 'after_text';
               }
-                // Check if tool_before_conclusion exists and matches this query
-              else if (responseText.includes('"tool_before_conclusion"') && 
+              // Check if tool_before_conclusion exists and matches this query
+              else if (responseText.includes('"tool_before_conclusion"') &&
                 responseText.includes(`"query": "${searchCall.query}"`)) {
                 toolCall.position = 'before_conclusion';
               }
@@ -369,7 +371,7 @@ function createChatStore() {
 
             while (startIndex !== -1) {
               parts.push(remainingText.substring(0, startIndex));
-      
+
               let openBraces = 0;
               let endIndex = -1;
               for (let i = startIndex; i < remainingText.length; i++) {
@@ -392,8 +394,8 @@ function createChatStore() {
                     // Only add if not already in toolCalls (to avoid duplicates)
                     const alreadyExists = toolCalls.some(tc => tc.query === parsedTool.query);
                     if (!alreadyExists) {
-                      toolCalls.push({ 
-                        name: parsedTool.tool_call, 
+                      toolCalls.push({
+                        name: parsedTool.tool_call,
                         query: parsedTool.query,
                         urls: [],
                         isLoading: false
@@ -420,18 +422,32 @@ function createChatStore() {
           }
         }
 
+        // Generate a stable messageId for the AI message
+        const aiMessageId = crypto.randomUUID();
+
+        // STEP 4: Handle email_tool_call data if present
+        // Only store the data for historical loading - don't add another toolCall
+        // (the toolCall was already added in Step 3 from parsing the JSON in response)
+        if (msg.email_tool_call) {
+          // Store the email_tool_call data mapped to this AI message's ID
+          emailToolDataMap[aiMessageId] = msg.email_tool_call;
+
+          // Note: We don't add another toolCall here because Step 3 already parsed
+          // the {"tool_call": "email_tool"} from the response and added it to toolCalls
+        }
+
         chatMessages.push({
-          id: crypto.randomUUID(),
+          id: aiMessageId,
           type: 'ai',
           content: content,
           timestamp: new Date(msg.timestamp),
           mode: mode,
-          codeModeContent: codeModeContent,
+          codeModeContent: codeModeContent || undefined,
           toolCalls: toolCalls
         });
-        
+
       });
-      
+
       update(state => ({
         ...state,
         messages: chatMessages,
@@ -441,6 +457,9 @@ function createChatStore() {
         isCreatingNewConversation: false,
         currentStreamingId: null
       }));
+
+      // Return the email tool data map for the caller to use
+      return emailToolDataMap;
     }
   };
 }

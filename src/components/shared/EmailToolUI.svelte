@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Mail, Check, X, ChevronDown, AlertCircle, Loader2 } from 'lucide-svelte';
-  import { slide, fade } from 'svelte/transition';
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { Mail, Check, X, ChevronDown, AlertCircle } from 'lucide-svelte';
+  import { slide } from 'svelte/transition';
+  import { onDestroy } from 'svelte';
   import { emailToolStore, type EmailToolState, type IterationStep } from '../../stores/emailTool';
   import { sendApprovalResponse, getGmailOAuthUrl } from '../../lib/emailSocket';
 
@@ -16,26 +16,22 @@
   // Local State
   // ============================================================================
 
-  let isExpanded = false;
-  let containerElement: HTMLDivElement;
-  
-  // Typing animation state - track per iteration
-  let typingStates: { [iteration: number]: { displayed: string; target: string; interval: ReturnType<typeof setInterval> | null } } = {};
+  let isExpanded = true; // Start expanded to show steps
+  let scrollContainer: HTMLDivElement;
 
   // ============================================================================
-  // Reactive State
+  // Reactive State - Keep it simple!
   // ============================================================================
 
   // Get state for THIS specific email tool instance
-  $: allStates = $emailToolStore;
-  $: state = allStates[messageId] as EmailToolState | undefined;
+  $: state = $emailToolStore[messageId] as EmailToolState | undefined;
 
   // Default state if not found
-  $: safeState = state || {
+  $: safeState = state ?? {
     messageId,
     isActive: false,
     currentIteration: 0,
-    iterations: [],
+    iterations: [] as IterationStep[],
     needsAuth: false,
     authMessage: null,
     needsApproval: false,
@@ -45,102 +41,19 @@
     error: null,
   };
 
-  // Log state changes for debugging
-  $: if (state) {
-    console.log(`🎨 EmailToolUI [${messageId.substring(0, 8)}] state:`, {
-      isActive: state.isActive,
-      needsAuth: state.needsAuth,
-      iterations: state.iterations.length,
-      isCompleted: state.isCompleted,
-      error: state.error,
-    });
-  }
-
-  // ============================================================================
-  // Typing Animation Logic
-  // ============================================================================
-
-  // Watch for iteration changes and start/update typing animations
-  $: if (safeState.iterations) {
-    handleIterationsChange(safeState.iterations);
-  }
-
-  function handleIterationsChange(iterations: IterationStep[]) {
-    iterations.forEach((step) => {
-      const existing = typingStates[step.iteration];
-      
-      if (!existing) {
-        // New iteration - start typing from scratch
-        typingStates[step.iteration] = {
-          displayed: '',
-          target: step.reasoning,
-          interval: null,
-        };
-        startTypingForIteration(step.iteration);
-      } else if (existing.target !== step.reasoning) {
-        // Reasoning updated - continue from current position if possible
-        existing.target = step.reasoning;
-        if (!existing.interval && existing.displayed.length < step.reasoning.length) {
-          startTypingForIteration(step.iteration);
-        }
-      }
-    });
-  }
-
-  function startTypingForIteration(iteration: number) {
-    const state = typingStates[iteration];
-    if (!state || state.interval) return;
-
-    const target = state.target;
-    
-    // If new reasoning doesn't start with current displayed, reset
-    if (!target.startsWith(state.displayed)) {
-      state.displayed = '';
-    }
-
-    state.interval = setInterval(() => {
-      if (state.displayed.length < target.length) {
-        state.displayed = target.substring(0, state.displayed.length + 1);
-        typingStates = { ...typingStates }; // Trigger reactivity
-      } else {
-        if (state.interval) {
-          clearInterval(state.interval);
-          state.interval = null;
-        }
-      }
-    }, 12); // Smooth typing speed
-  }
-
-  function getDisplayedReasoning(iteration: number): string {
-    return typingStates[iteration]?.displayed || '';
-  }
-
-  function isStillTyping(iteration: number): boolean {
-    const state = typingStates[iteration];
-    if (!state) return false;
-    return state.displayed.length < state.target.length;
-  }
-
-  // ============================================================================
-  // Auto-scroll to bottom when new content arrives
-  // ============================================================================
-
-  $: if (safeState.iterations.length > 0 && containerElement) {
-    tick().then(() => {
-      if (containerElement) {
-        containerElement.scrollTop = containerElement.scrollHeight;
-      }
-    });
-  }
+  // Debug logging
+  $: console.log(`🎨 EmailToolUI [${messageId.substring(0, 8)}]:`, {
+    needsAuth: safeState.needsAuth,
+    iterations: safeState.iterations.length,
+    isCompleted: safeState.isCompleted,
+  });
 
   // ============================================================================
   // Event Handlers
   // ============================================================================
 
   function toggleExpand() {
-    if (safeState.isCompleted || safeState.error) {
-      isExpanded = !isExpanded;
-    }
+    isExpanded = !isExpanded;
   }
 
   function handleConnectGmail() {
@@ -166,44 +79,29 @@
   }
 
   function formatEmailBody(body: string): string {
+    if (!body) return '';
     return body.replace(/\\n/g, '\n').trim();
   }
 
-  // ============================================================================
-  // Cleanup
-  // ============================================================================
-
-  onDestroy(() => {
-    // Clear all typing intervals
-    Object.values(typingStates).forEach(state => {
-      if (state.interval) {
-        clearInterval(state.interval);
-      }
-    });
-    typingStates = {};
-  });
+  // Helper to format recipients - handles both string and array format from backend
+  function formatRecipients(recipients: string | string[] | undefined | null): string {
+    if (!recipients) return 'N/A';
+    if (Array.isArray(recipients)) {
+      return recipients.length > 0 ? recipients.join(', ') : 'N/A';
+    }
+    return recipients; // Already a string
+  }
 </script>
 
 <div 
   class="email-tool-container" 
   class:completed={safeState.isCompleted} 
-  class:error={!!safeState.error}
-  class:has-steps={safeState.iterations.length > 0}
+  class:has-error={!!safeState.error}
 >
   <!-- Header -->
-  <button 
-    class="email-header" 
-    on:click={toggleExpand}
-    class:clickable={safeState.isCompleted || safeState.error}
-  >
-    <div class="email-icon" class:active={safeState.isActive && !safeState.needsAuth && !safeState.needsApproval}>
-      {#if safeState.isActive && !safeState.needsAuth}
-        <div class="icon-pulse">
-          <Mail size={18} />
-        </div>
-      {:else}
-        <Mail size={18} />
-      {/if}
+  <button class="email-header" on:click={toggleExpand}>
+    <div class="email-icon" class:active={safeState.isActive}>
+      <Mail size={18} />
     </div>
     
     <div class="email-info">
@@ -225,143 +123,121 @@
         <span class="email-label auth-needed">
           Gmail Authentication Required
         </span>
+      {:else if safeState.iterations.length > 0}
+        <span class="email-label active">
+          Step {safeState.currentIteration} - Processing...
+        </span>
       {:else if safeState.isActive}
         <span class="email-label active">
-          Processing email request...
+          Starting email task...
         </span>
       {:else}
         <span class="email-label">Email Tool</span>
       {/if}
     </div>
     
-    {#if safeState.isCompleted || safeState.error}
-      <div class="expand-icon" class:rotated={isExpanded}>
-        <ChevronDown size={16} />
-      </div>
-    {/if}
+    <div class="expand-icon" class:rotated={isExpanded}>
+      <ChevronDown size={16} />
+    </div>
   </button>
 
-  <!-- Gmail Auth UI -->
-  {#if safeState.needsAuth}
-    <div class="auth-container" transition:slide={{ duration: 200 }}>
-      <div class="auth-content">
-        <div class="auth-icon">
-          <AlertCircle size={20} />
-        </div>
-        <div class="auth-text">
-          <span class="auth-title">Connect Gmail to Continue</span>
-          <span class="auth-message">{safeState.authMessage || 'Authentication required to access your emails'}</span>
-        </div>
-      </div>
-      <button class="connect-gmail-btn" on:click={handleConnectGmail}>
-        <Mail size={16} />
-        Connect Gmail
-      </button>
-    </div>
-  {/if}
-
-  <!-- Steps Timeline (Scrollable) -->
-  {#if safeState.iterations.length > 0 && !safeState.needsAuth}
-    <div 
-      class="steps-container" 
-      bind:this={containerElement}
-      transition:slide={{ duration: 200 }}
-    >
-      {#each safeState.iterations as step, index (step.iteration)}
-        <div 
-          class="step-item" 
-          class:active={step.isTyping && !step.isComplete}
-          class:completed={step.isComplete}
-          in:slide={{ duration: 250, delay: 50 }}
-        >
-          <!-- Connector line to previous step -->
-          {#if index > 0}
-            <div class="step-connector">
-              <div class="connector-line" class:animated={!safeState.iterations[index - 1]?.isComplete}></div>
+  <!-- Content Area -->
+  {#if isExpanded}
+    <div class="email-content" transition:slide={{ duration: 200 }}>
+      
+      <!-- Gmail Auth UI -->
+      {#if safeState.needsAuth}
+        <div class="auth-container">
+          <div class="auth-content">
+            <div class="auth-icon">
+              <AlertCircle size={20} />
             </div>
-          {/if}
-
-          <!-- Step Header with Badge -->
-          <div class="step-header">
-            <div class="step-badge" class:active={step.isTyping && !step.isComplete}>
-              <span class="step-number">{step.iteration}</span>
+            <div class="auth-text">
+              <span class="auth-title">Connect Gmail to Continue</span>
+              <span class="auth-message">{safeState.authMessage || 'Authentication required to access your emails'}</span>
             </div>
-            <span class="step-label">Step {step.iteration}</span>
           </div>
+          <button class="connect-gmail-btn" on:click={handleConnectGmail}>
+            <Mail size={16} />
+            Connect Gmail
+          </button>
+        </div>
+      {/if}
 
-          <!-- Step Reasoning with Typing Animation -->
-          <div class="step-content">
-            <p class="step-reasoning">
-              {getDisplayedReasoning(step.iteration)}{#if isStillTyping(step.iteration)}<span class="typing-cursor">|</span>{/if}
-            </p>
-
-            <!-- Approval UI embedded in this step -->
-            {#if step.approval && safeState.needsApproval}
-              <div class="step-approval" transition:slide={{ duration: 200 }}>
-                <div class="approval-card">
-                  <div class="approval-header">
-                    <span class="approval-title">Review Before Sending</span>
-                  </div>
-                  
-                  <div class="email-preview">
-                    <div class="email-field">
-                      <span class="field-label">To</span>
-                      <span class="field-value">{step.approval.parameters.to?.join(', ') || 'N/A'}</span>
-                    </div>
-                    {#if step.approval.parameters.cc?.length > 0}
-                      <div class="email-field">
-                        <span class="field-label">CC</span>
-                        <span class="field-value">{step.approval.parameters.cc.join(', ')}</span>
-                      </div>
-                    {/if}
-                    {#if step.approval.parameters.bcc?.length > 0}
-                      <div class="email-field">
-                        <span class="field-label">BCC</span>
-                        <span class="field-value">{step.approval.parameters.bcc.join(', ')}</span>
-                      </div>
-                    {/if}
-                    <div class="email-field">
-                      <span class="field-label">Subject</span>
-                      <span class="field-value subject">{step.approval.parameters.subject || 'No subject'}</span>
-                    </div>
-                    <div class="email-body-preview">
-                      <pre>{formatEmailBody(step.approval.parameters.body || '')}</pre>
-                    </div>
-                  </div>
-
-                  <div class="approval-actions">
-                    <button class="reject-btn" on:click={handleReject}>
-                      <X size={14} />
-                      Reject
-                    </button>
-                    <button class="approve-btn" on:click={handleApprove}>
-                      <Check size={14} />
-                      Send
-                    </button>
-                  </div>
+      <!-- Steps Timeline -->
+      {#if safeState.iterations.length > 0 && !safeState.needsAuth}
+        <div class="steps-container" bind:this={scrollContainer}>
+          {#each safeState.iterations as step (step.iteration)}
+            <div class="step-item" class:active={!step.isComplete}>
+              <div class="step-header">
+                <div class="step-badge" class:active={!step.isComplete}>
+                  <span class="step-number">{step.iteration}</span>
                 </div>
+                <span class="step-label">Step {step.iteration}</span>
               </div>
-            {/if}
-          </div>
-        </div>
-      {/each}
-    </div>
-  {/if}
+              
+              <div class="step-content">
+                <p class="step-reasoning">{step.reasoning || 'Processing...'}</p>
 
-  <!-- Expanded Summary for Completed Tasks -->
-  {#if isExpanded && safeState.isCompleted && safeState.result?.summary}
-    <div class="summary-container" transition:slide={{ duration: 200 }}>
-      <div class="summary-label">Summary</div>
-      <p class="summary-text">{safeState.result.summary}</p>
+                <!-- Approval UI embedded in step -->
+                {#if step.approval && safeState.needsApproval}
+                  <div class="step-approval">
+                    <div class="approval-card">
+                      <div class="approval-header">
+                        <span class="approval-title">Review Before Sending</span>
+                      </div>
+                      
+                      <div class="email-preview">
+                        <div class="email-field">
+                          <span class="field-label">To</span>
+                          <span class="field-value">{formatRecipients(step.approval.parameters?.to)}</span>
+                        </div>
+                        {#if step.approval.parameters?.cc}
+                          <div class="email-field">
+                            <span class="field-label">CC</span>
+                            <span class="field-value">{formatRecipients(step.approval.parameters.cc)}</span>
+                          </div>
+                        {/if}
+                        <div class="email-field">
+                          <span class="field-label">Subject</span>
+                          <span class="field-value subject">{step.approval.parameters?.subject || 'No subject'}</span>
+                        </div>
+                        <div class="email-body-preview">
+                          <pre>{formatEmailBody(step.approval.parameters?.body || '')}</pre>
+                        </div>
+                      </div>
+
+                      <div class="approval-actions">
+                        <button class="reject-btn" on:click={handleReject}>
+                          <X size={14} />
+                          Reject
+                        </button>
+                        <button class="approve-btn" on:click={handleApprove}>
+                          <Check size={14} />
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <!-- Completed Summary -->
+      {#if safeState.isCompleted && safeState.result?.summary}
+        <div class="summary-container">
+          <div class="summary-label">Summary</div>
+          <p class="summary-text">{safeState.result.summary}</p>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
 
 <style>
-  /* ============================================================================
-   * Container
-   * ============================================================================ */
-  
   .email-tool-container {
     margin: 0.75rem 0;
     border: 1px solid rgba(0, 0, 0, 0.08);
@@ -370,28 +246,17 @@
     background: var(--surface-color);
     width: 100%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    transition: all 0.3s ease;
   }
 
   :global([data-theme="dark"]) .email-tool-container {
     border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   }
 
-  .email-tool-container.error {
+  .email-tool-container.has-error {
     border-color: rgba(239, 68, 68, 0.3);
   }
 
-  .email-tool-container.has-steps {
-    max-height: 400px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* ============================================================================
-   * Header
-   * ============================================================================ */
-
+  /* Header */
   .email-header {
     width: 100%;
     display: flex;
@@ -400,27 +265,20 @@
     padding: 0.875rem 1rem;
     background: transparent;
     border: none;
-    cursor: default;
-    transition: all 0.2s ease;
-    text-align: left;
-    flex-shrink: 0;
-  }
-
-  .email-header.clickable {
     cursor: pointer;
+    text-align: left;
   }
 
-  .email-header.clickable:hover {
+  .email-header:hover {
     background: rgba(0, 0, 0, 0.02);
   }
 
-  :global([data-theme="dark"]) .email-header.clickable:hover {
+  :global([data-theme="dark"]) .email-header:hover {
     background: rgba(255, 255, 255, 0.03);
   }
 
   .email-icon {
     color: var(--text-muted);
-    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -428,27 +286,21 @@
     height: 32px;
     border-radius: 8px;
     background: rgba(102, 126, 234, 0.08);
-    transition: all 0.3s ease;
   }
 
   .email-icon.active {
     background: rgba(102, 126, 234, 0.15);
     color: var(--primary-color);
+    animation: pulse 2s ease-in-out infinite;
   }
 
-  .icon-pulse {
-    animation: iconPulse 2s ease-in-out infinite;
-  }
-
-  @keyframes iconPulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(0.95); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
   .email-info {
     flex: 1;
-    display: flex;
-    flex-direction: column;
     min-width: 0;
   }
 
@@ -456,48 +308,37 @@
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-color);
-    line-height: 1.4;
     display: flex;
     align-items: center;
     gap: 0.4rem;
   }
 
-  .email-label.error {
-    color: #ef4444;
-  }
-
-  .email-label.completed {
-    color: #10b981;
-  }
-
-  .email-label.auth-needed {
-    color: #f59e0b;
-  }
-
-  .email-label.active {
-    color: var(--primary-color);
-  }
+  .email-label.error { color: #ef4444; }
+  .email-label.completed { color: #10b981; }
+  .email-label.auth-needed { color: #f59e0b; }
+  .email-label.active { color: var(--primary-color); }
 
   .expand-icon {
     color: var(--text-muted);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 0.6;
+    transition: transform 0.2s ease;
   }
 
   .expand-icon.rotated {
     transform: rotate(180deg);
   }
 
-  /* ============================================================================
-   * Auth Container
-   * ============================================================================ */
+  /* Content */
+  .email-content {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
 
+  :global([data-theme="dark"]) .email-content {
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* Auth Container */
   .auth-container {
     padding: 1rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
     background: rgba(245, 158, 11, 0.04);
     display: flex;
     flex-direction: column;
@@ -505,7 +346,6 @@
   }
 
   :global([data-theme="dark"]) .auth-container {
-    border-top-color: rgba(255, 255, 255, 0.06);
     background: rgba(245, 158, 11, 0.08);
   }
 
@@ -516,7 +356,6 @@
   }
 
   .auth-icon {
-    flex-shrink: 0;
     color: #f59e0b;
     margin-top: 0.125rem;
   }
@@ -536,7 +375,6 @@
   .auth-message {
     font-size: 0.8125rem;
     color: var(--text-muted);
-    line-height: 1.4;
   }
 
   .connect-gmail-btn {
@@ -552,84 +390,32 @@
     font-size: 0.8125rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
     width: fit-content;
+    transition: all 0.2s ease;
   }
 
   .connect-gmail-btn:hover {
     background: #d33426;
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(234, 67, 53, 0.3);
   }
 
-  /* ============================================================================
-   * Steps Timeline Container
-   * ============================================================================ */
-
+  /* Steps Container */
   .steps-container {
-    flex: 1;
+    padding: 1rem;
+    max-height: 300px;
     overflow-y: auto;
-    padding: 0.5rem 1rem 1rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
   }
-
-  :global([data-theme="dark"]) .steps-container {
-    border-top-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .steps-container::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .steps-container::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .steps-container::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 2px;
-  }
-
-  /* ============================================================================
-   * Step Item
-   * ============================================================================ */
 
   .step-item {
     position: relative;
     padding-left: 2rem;
+    margin-bottom: 1rem;
   }
 
-  .step-item:not(:first-child) {
-    margin-top: 0.75rem;
+  .step-item:last-child {
+    margin-bottom: 0;
   }
 
-  /* Connector Line */
-  .step-connector {
-    position: absolute;
-    left: 0.6875rem;
-    top: -0.75rem;
-    width: 2px;
-    height: 0.75rem;
-  }
-
-  .connector-line {
-    width: 100%;
-    height: 100%;
-    background: var(--border-color);
-    border-radius: 1px;
-  }
-
-  .connector-line.animated {
-    background: linear-gradient(180deg, var(--border-color) 0%, var(--primary-color) 100%);
-    animation: connectorGrow 0.3s ease-out;
-  }
-
-  @keyframes connectorGrow {
-    from { height: 0; }
-    to { height: 100%; }
-  }
-
-  /* Step Header */
   .step-header {
     display: flex;
     align-items: center;
@@ -647,12 +433,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
   }
 
   .step-badge.active {
     background: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
   }
 
   .step-number {
@@ -669,11 +453,6 @@
     letter-spacing: 0.03em;
   }
 
-  /* Step Content */
-  .step-content {
-    padding-left: 0;
-  }
-
   .step-reasoning {
     font-size: 0.875rem;
     color: var(--text-color);
@@ -681,21 +460,7 @@
     margin: 0;
   }
 
-  .typing-cursor {
-    color: var(--primary-color);
-    animation: blink 1s step-end infinite;
-    font-weight: 300;
-  }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-
-  /* ============================================================================
-   * Approval Card (Embedded in Step)
-   * ============================================================================ */
-
+  /* Approval Card */
   .step-approval {
     margin-top: 0.75rem;
   }
@@ -709,7 +474,6 @@
 
   :global([data-theme="dark"]) .approval-card {
     background: rgba(102, 126, 234, 0.08);
-    border-color: rgba(102, 126, 234, 0.2);
   }
 
   .approval-header {
@@ -722,7 +486,6 @@
     font-weight: 600;
     color: var(--primary-color);
     text-transform: uppercase;
-    letter-spacing: 0.03em;
   }
 
   .email-preview {
@@ -736,14 +499,9 @@
     font-size: 0.8125rem;
   }
 
-  .email-field:last-of-type {
-    margin-bottom: 0;
-  }
-
   .field-label {
     color: var(--text-muted);
     min-width: 50px;
-    flex-shrink: 0;
     font-weight: 500;
   }
 
@@ -762,10 +520,6 @@
     border-top: 1px solid rgba(0, 0, 0, 0.06);
   }
 
-  :global([data-theme="dark"]) .email-body-preview {
-    border-top-color: rgba(255, 255, 255, 0.06);
-  }
-
   .email-body-preview pre {
     font-family: inherit;
     font-size: 0.8125rem;
@@ -773,8 +527,7 @@
     white-space: pre-wrap;
     word-break: break-word;
     margin: 0;
-    line-height: 1.5;
-    max-height: 120px;
+    max-height: 100px;
     overflow-y: auto;
   }
 
@@ -785,10 +538,6 @@
     padding: 0.625rem 0.875rem;
     border-top: 1px solid rgba(102, 126, 234, 0.1);
     background: rgba(0, 0, 0, 0.02);
-  }
-
-  :global([data-theme="dark"]) .approval-actions {
-    background: rgba(255, 255, 255, 0.02);
   }
 
   .reject-btn, .approve-btn {
@@ -823,23 +572,13 @@
 
   .approve-btn:hover {
     background: #059669;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
   }
 
-  /* ============================================================================
-   * Summary Container
-   * ============================================================================ */
-
+  /* Summary */
   .summary-container {
     padding: 0.875rem 1rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
     background: rgba(0, 0, 0, 0.02);
-  }
-
-  :global([data-theme="dark"]) .summary-container {
-    border-top-color: rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
   }
 
   .summary-label {
@@ -847,7 +586,6 @@
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
     margin-bottom: 0.375rem;
   }
 

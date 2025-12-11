@@ -464,6 +464,60 @@ function createEmailToolStore() {
         },
 
         /**
+         * Load historical email tool data from /history/<session_num> response
+         * Used to reconstruct email tool UI when loading past sessions
+         */
+        loadHistorical: (messageId: string, data: {
+            iterations: Array<{
+                iteration: number;
+                reasoning: string;
+                function?: string | null;
+                parameters?: any;
+                result?: any;
+            }>;
+            query: string;
+            success: boolean;
+            summary?: string;
+            total_iterations?: number;
+        }) => {
+            console.log('📧 Loading historical email tool data for:', messageId);
+
+            // Convert backend iterations to store format
+            const iterations: IterationStep[] = data.iterations.map(iter => ({
+                iteration: iter.iteration,
+                reasoning: iter.reasoning || '',
+                isTyping: false,
+                isComplete: true,
+            }));
+
+            // Sort by iteration number to ensure correct order
+            iterations.sort((a, b) => a.iteration - b.iteration);
+
+            const state: EmailToolState = {
+                messageId,
+                isActive: false, // Historical data is never active
+                currentIteration: data.total_iterations || iterations.length,
+                iterations,
+                needsAuth: false,
+                authMessage: null,
+                needsApproval: false,
+                approvalData: null,
+                isCompleted: true, // Historical data is always completed
+                result: {
+                    success: data.success,
+                    summary: data.summary,
+                    total_iterations: data.total_iterations || iterations.length,
+                },
+                error: null,
+            };
+
+            update(states => ({
+                ...states,
+                [messageId]: state,
+            }));
+        },
+
+        /**
          * Clear all states (e.g., on session change)
          */
         clearAll: () => {

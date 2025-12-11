@@ -10,6 +10,7 @@ const BASE_URL = 'https://chatbot-backend-wandering-shadow-534.fly.dev';
 let socket: Socket | null = null;
 let currentJoinedRoom: string | null = null;
 let currentSessionId: string | null = null;
+let currentUserId: number | null = null; // Stored from room_joined response
 let pendingSessionId: string | null = null;
 let isConnecting: boolean = false;
 
@@ -40,6 +41,22 @@ function getUserEmail(): string | null {
     return null;
 }
 
+/**
+ * Get user ID from localStorage
+ */
+function getUserId(): number | null {
+    const userStr = localStorage.getItem('deepthinks_user');
+    if (!userStr) return null;
+
+    try {
+        const user = JSON.parse(userStr);
+        return user.id || user.user_id || null;
+    } catch (e) {
+        console.error('Failed to parse user from localStorage:', e);
+    }
+    return null;
+}
+
 // ============================================================================
 // Socket Event Handlers
 // ============================================================================
@@ -55,16 +72,21 @@ function setupEventHandlers(): void {
         console.log('📧 Email socket connected, id:', socket?.id);
         isConnecting = false;
 
-        // If we have a pending session, join that room now
-        if (pendingSessionId) {
-            console.log('📧 Joining pending session room:', pendingSessionId);
-            joinRoomInternal(pendingSessionId);
-            pendingSessionId = null;
+        // Priority: pending session first, then current session for rejoining
+        const sessionToJoin = pendingSessionId || currentSessionId;
+        if (sessionToJoin) {
+            console.log('📧 Rejoining room for session:', sessionToJoin);
+            joinRoomInternal(sessionToJoin);
+            pendingSessionId = null; // Clear pending after join attempt
+        } else {
+            console.log('📧 No session to join on connect');
         }
     });
 
     socket.on('disconnect', (reason) => {
         console.log('📧 Email socket disconnected:', reason);
+        // Don't clear currentSessionId - we need it for rejoining
+        // Only clear the joined room marker
         currentJoinedRoom = null;
     });
 
@@ -82,10 +104,13 @@ function setupEventHandlers(): void {
         }
     });
 
-    // Room joined confirmation
+    // Room joined confirmation - extract and store user_id for later use
     socket.on('room_joined', (data: { room: string; user_id?: number; session_id?: string }) => {
-        console.log('📧 Joined email room:', data.room);
+        console.log('📧 Joined email room:', data.room, 'user_id:', data.user_id);
         currentJoinedRoom = data.room;
+        if (data.user_id) {
+            currentUserId = data.user_id;
+        }
     });
 
     // ========================================================================
@@ -280,16 +305,16 @@ export function sendApprovalResponse(approved: boolean): void {
         return;
     }
 
-    const userEmail = getUserEmail();
-    if (!userEmail || !currentSessionId) {
-        console.error('📧 Cannot send approval: Missing userEmail or sessionId');
+    // Use user_id from room_joined event
+    if (!currentUserId || !currentSessionId) {
+        console.error('📧 Cannot send approval: Missing userId or sessionId', { userId: currentUserId, sessionId: currentSessionId });
         return;
     }
 
-    console.log('📧 Sending approval response:', { approved, session_id: currentSessionId });
+    console.log('📧 Sending approval response:', { user_id: currentUserId, session_id: currentSessionId, approved });
 
     socket.emit('email_tool_user_approved', {
-        user_email: userEmail,
+        user_id: currentUserId,
         session_id: currentSessionId,
         approved
     });

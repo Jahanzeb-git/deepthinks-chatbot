@@ -11,6 +11,36 @@ class APIError extends Error {
   }
 }
 
+/**
+ * Get client's local datetime in ISO format with timezone offset
+ * Example: "2025-12-12T01:00:00.123+05:00"
+ */
+function getLocalISOString(): string {
+  const now = new Date();
+  const tzOffset = -now.getTimezoneOffset(); // in minutes
+  const sign = tzOffset >= 0 ? '+' : '-';
+  const hours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+  const minutes = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hour = String(now.getHours()).padStart(2, '0');
+  const minute = String(now.getMinutes()).padStart(2, '0');
+  const second = String(now.getSeconds()).padStart(2, '0');
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}.${ms}${sign}${hours}:${minutes}`;
+}
+
+/**
+ * Get client's IANA timezone string
+ * Example: "Asia/Karachi"
+ */
+function getClientTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 async function makeRequest(endpoint: string, options: RequestInit = {}) {
   const auth = get(authStore);
   const headers: HeadersInit = {
@@ -99,7 +129,12 @@ export const api = {
     onError: (error: Error) => void
   ) {
     const auth = get(authStore);
-    const body: any = { query, reason };
+    const body: any = {
+      query,
+      reason,
+      client_datetime: getLocalISOString(),
+      client_timezone: getClientTimezone()
+    };
 
     if (auth.isAuthenticated) {
       body.session_id = sessionId;

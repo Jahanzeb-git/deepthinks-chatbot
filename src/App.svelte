@@ -268,7 +268,16 @@
     try {
       sessionStore.setCurrentSession(sessionNumber);
       const messages = await api.getSessionHistory(sessionNumber);
-      chatStore.loadSessionMessages(messages);
+      
+      // Load messages and get email tool data map
+      const emailToolDataMap = chatStore.loadSessionMessages(messages);
+      
+      // Load historical email tool data into emailToolStore
+      Object.entries(emailToolDataMap).forEach(([messageId, emailToolData]) => {
+        if (emailToolData && emailToolData.iterations) {
+          emailToolStore.loadHistorical(messageId, emailToolData);
+        }
+      });
 
       const uuid = sessionUuidStore.getUuidBySessionNumber(sessionNumber);
       if (uuid) {
