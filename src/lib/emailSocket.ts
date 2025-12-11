@@ -3,33 +3,25 @@ import { emailToolStore } from '../stores/emailTool';
 
 const BASE_URL = 'https://chatbot-backend-wandering-shadow-534.fly.dev';
 
+// ============================================================================
+// Module-level State
+// ============================================================================
+
 let socket: Socket | null = null;
-let currentRoom: string | null = null;
+let currentJoinedRoom: string | null = null;
+let currentSessionId: string | null = null;
+let pendingSessionId: string | null = null;
+let isConnecting: boolean = false;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
  * Get JWT token from localStorage
  */
 function getToken(): string | null {
     return localStorage.getItem('deepthinks_token');
-}
-
-/**
- * Get active session ID from localStorage
- * deepthinks_sessions is an array where index 0 is the active session
- */
-function getActiveSessionId(): string | null {
-    const sessionsStr = localStorage.getItem('deepthinks_sessions');
-    if (!sessionsStr) return null;
-
-    try {
-        const sessions = JSON.parse(sessionsStr);
-        if (Array.isArray(sessions) && sessions.length > 0) {
-            return sessions[0].toString();
-        }
-    } catch (e) {
-        console.error('Failed to parse sessions from localStorage:', e);
-    }
-    return null;
 }
 
 /**
@@ -48,63 +40,71 @@ function getUserEmail(): string | null {
     return null;
 }
 
+// ============================================================================
+// Socket Event Handlers
+// ============================================================================
+
 /**
- * Initialize Socket.IO connection for email tool
- * Should be called when user is authenticated
+ * Set up all socket event handlers
  */
-export function connectEmailSocket(): void {
-    if (socket?.connected) {
-        console.log('Email socket already connected');
-        return;
-    }
+function setupEventHandlers(): void {
+    if (!socket) return;
 
-    const token = getToken();
-    if (!token) {
-        console.warn('Cannot connect email socket: No auth token');
-        return;
-    }
-
-    socket = io(BASE_URL, {
-        transports: ['websocket', 'polling'],
-        auth: { token },
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-    });
-
+    // Connection events
     socket.on('connect', () => {
-        console.log('Email socket connected');
-        // Join room on connect
-        joinEmailRoom();
+        console.log('📧 Email socket connected, id:', socket?.id);
+        isConnecting = false;
+
+        // If we have a pending session, join that room now
+        if (pendingSessionId) {
+            console.log('📧 Joining pending session room:', pendingSessionId);
+            joinRoomInternal(pendingSessionId);
+            pendingSessionId = null;
+        }
     });
 
     socket.on('disconnect', (reason) => {
-        console.log('Email socket disconnected:', reason);
-        currentRoom = null;
+        console.log('📧 Email socket disconnected:', reason);
+        currentJoinedRoom = null;
     });
 
     socket.on('connect_error', (error) => {
-        console.error('Email socket connection error:', error);
+        console.error('📧 Email socket connection error:', error);
+        isConnecting = false;
+    });
+
+    // Reconnection handling
+    socket.on('reconnect', (attemptNumber) => {
+        console.log('📧 Email socket reconnected after', attemptNumber, 'attempts');
+        // Re-join room after reconnection
+        if (currentSessionId) {
+            joinRoomInternal(currentSessionId);
+        }
     });
 
     // Room joined confirmation
-    socket.on('room_joined', (data: { room: string }) => {
-        console.log('Joined email room:', data.room);
-        currentRoom = data.room;
+    socket.on('room_joined', (data: { room: string; user_id?: number; session_id?: string }) => {
+        console.log('📧 Joined email room:', data.room);
+        currentJoinedRoom = data.room;
     });
+
+    // ========================================================================
+    // Email Tool Events - Route to active email tool instance
+    // ========================================================================
 
     // Gmail authentication needed
     socket.on('email_tool_needs_auth', (data: { message: string }) => {
-        console.log('🔔 EVENT RECEIVED: email_tool_needs_auth');
+        console.log('🔔 EVENT: email_tool_needs_auth');
         console.log('📨 Data:', data);
-        console.log('➡️ Calling emailToolStore.setNeedsAuth(true, message)');
+        console.log('📧 Active email tool:', emailToolStore.getActiveId());
         emailToolStore.setNeedsAuth(true, data.message);
-        console.log('✅ setNeedsAuth called');
     });
 
     // Progress updates
     socket.on('email_tool_progress', (data: { iteration: number; reasoning: string }) => {
-        console.log('Email tool progress:', data);
+        console.log('🔔 EVENT: email_tool_progress');
+        console.log('📨 Data:', { iteration: data.iteration, reasoning: data.reasoning.substring(0, 50) + '...' });
+        console.log('📧 Active email tool:', emailToolStore.getActiveId());
         emailToolStore.setProgress(data.iteration, data.reasoning);
     });
 
@@ -114,13 +114,16 @@ export function connectEmailSocket(): void {
         parameters: { to: string[]; subject: string; body: string; cc: string[]; bcc: string[] };
         reasoning: string;
     }) => {
-        console.log('Email tool requesting approval:', data);
+        console.log('🔔 EVENT: email_tool_request_approval');
+        console.log('📨 Data:', { operation: data.operation, to: data.parameters.to });
+        console.log('📧 Active email tool:', emailToolStore.getActiveId());
         emailToolStore.setNeedsApproval(true, data);
     });
 
     // Approval acknowledged
     socket.on('approval_received', (data: { approved: boolean }) => {
-        console.log('Approval received:', data);
+        console.log('🔔 EVENT: approval_received');
+        console.log('📨 Data:', data);
         emailToolStore.setNeedsApproval(false, null);
     });
 
@@ -134,40 +137,138 @@ export function connectEmailSocket(): void {
             cancelled?: boolean;
         };
     }) => {
-        console.log('Email tool completed:', data);
+        console.log('🔔 EVENT: email_tool_completed');
+        console.log('📨 Data:', data.result);
+        console.log('📧 Active email tool:', emailToolStore.getActiveId());
         emailToolStore.setCompleted(data.result);
     });
 
     // Error
     socket.on('email_tool_error', (data: { error: string }) => {
-        console.error('Email tool error:', data.error);
+        console.error('🔔 EVENT: email_tool_error');
+        console.error('📨 Data:', data.error);
+        console.log('📧 Active email tool:', emailToolStore.getActiveId());
         emailToolStore.setError(data.error);
+    });
+
+    // Generic error
+    socket.on('error', (data: { message: string }) => {
+        console.error('📧 Socket error:', data.message);
     });
 }
 
+// ============================================================================
+// Internal Room Management
+// ============================================================================
+
 /**
- * Join email tool room
- * Must be connected first
+ * Internal function to join a room
  */
-export function joinEmailRoom(): void {
+function joinRoomInternal(sessionId: string): void {
     if (!socket?.connected) {
-        console.warn('Cannot join room: Socket not connected');
+        console.warn('📧 Cannot join room: Socket not connected');
+        pendingSessionId = sessionId;
         return;
     }
 
     const userEmail = getUserEmail();
-    const sessionId = getActiveSessionId();
-
-    if (!userEmail || !sessionId) {
-        console.warn('Cannot join room: Missing userEmail or sessionId');
+    if (!userEmail) {
+        console.warn('📧 Cannot join room: No user email');
         return;
     }
 
-    console.log('Emitting email_tool_join_room:', { user_email: userEmail, session_id: sessionId });
+    const expectedRoom = `email_tool_${userEmail}_${sessionId}`;
+
+    // Don't rejoin if already in the correct room
+    if (currentJoinedRoom === expectedRoom) {
+        console.log('📧 Already in room:', expectedRoom);
+        return;
+    }
+
+    console.log('📧 Joining room:', { user_email: userEmail, session_id: sessionId });
+    currentSessionId = sessionId;
+
     socket.emit('email_tool_join_room', {
         user_email: userEmail,
         session_id: sessionId
     });
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Initialize Socket.IO connection for email tool
+ * Should be called when user is authenticated
+ * NOTE: Does NOT join any room - use joinEmailRoomForSession for that
+ */
+export function connectEmailSocket(): void {
+    if (socket?.connected) {
+        console.log('📧 Email socket already connected');
+        return;
+    }
+
+    if (isConnecting) {
+        console.log('📧 Email socket connection already in progress');
+        return;
+    }
+
+    const token = getToken();
+    if (!token) {
+        console.warn('📧 Cannot connect email socket: No auth token');
+        return;
+    }
+
+    isConnecting = true;
+    console.log('📧 Connecting email socket...');
+
+    socket = io(BASE_URL, {
+        transports: ['websocket', 'polling'],
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+    });
+
+    setupEventHandlers();
+}
+
+/**
+ * Join email tool room for a specific session
+ * This should be called whenever the active session changes
+ * 
+ * @param sessionId - The session ID/number to join room for
+ */
+export function joinEmailRoomForSession(sessionId: string): void {
+    console.log('📧 joinEmailRoomForSession called with:', sessionId);
+
+    if (!sessionId) {
+        console.warn('📧 Cannot join room: No session ID provided');
+        return;
+    }
+
+    // Store the session ID for potential reconnect
+    currentSessionId = sessionId;
+
+    if (!socket) {
+        // Socket not created yet, store as pending
+        console.log('📧 Socket not created, storing pending session:', sessionId);
+        pendingSessionId = sessionId;
+        return;
+    }
+
+    if (!socket.connected) {
+        // Socket exists but not connected, store as pending
+        console.log('📧 Socket not connected, storing pending session:', sessionId);
+        pendingSessionId = sessionId;
+        return;
+    }
+
+    // Socket is connected, join immediately
+    joinRoomInternal(sessionId);
 }
 
 /**
@@ -175,22 +276,46 @@ export function joinEmailRoom(): void {
  */
 export function sendApprovalResponse(approved: boolean): void {
     if (!socket?.connected) {
-        console.error('Cannot send approval: Socket not connected');
+        console.error('📧 Cannot send approval: Socket not connected');
         return;
     }
 
     const userEmail = getUserEmail();
-    const sessionId = getActiveSessionId();
-
-    if (!userEmail || !sessionId) {
-        console.error('Cannot send approval: Missing userEmail or sessionId');
+    if (!userEmail || !currentSessionId) {
+        console.error('📧 Cannot send approval: Missing userEmail or sessionId');
         return;
     }
 
+    console.log('📧 Sending approval response:', { approved, session_id: currentSessionId });
+
     socket.emit('email_tool_user_approved', {
         user_email: userEmail,
-        session_id: sessionId,
+        session_id: currentSessionId,
         approved
+    });
+}
+
+/**
+ * Notify backend that auth was completed
+ */
+export function sendAuthCompleted(success: boolean): void {
+    if (!socket?.connected) {
+        console.error('📧 Cannot send auth completed: Socket not connected');
+        return;
+    }
+
+    const userEmail = getUserEmail();
+    if (!userEmail || !currentSessionId) {
+        console.error('📧 Cannot send auth completed: Missing userEmail or sessionId');
+        return;
+    }
+
+    console.log('📧 Sending auth completed:', { success, session_id: currentSessionId });
+
+    socket.emit('email_tool_auth_completed', {
+        user_email: userEmail,
+        session_id: currentSessionId,
+        success
     });
 }
 
@@ -199,9 +324,13 @@ export function sendApprovalResponse(approved: boolean): void {
  */
 export function disconnectEmailSocket(): void {
     if (socket) {
+        console.log('📧 Disconnecting email socket');
         socket.disconnect();
         socket = null;
-        currentRoom = null;
+        currentJoinedRoom = null;
+        currentSessionId = null;
+        pendingSessionId = null;
+        isConnecting = false;
     }
 }
 
@@ -216,7 +345,20 @@ export function isEmailSocketConnected(): boolean {
  * Get the Gmail OAuth URL
  */
 export function getGmailOAuthUrl(): string {
-    const sessionId = getActiveSessionId();
     const token = localStorage.getItem('deepthinks_token');
-    return `${BASE_URL}/auth/gmail/authorize?session_id=${sessionId}&token=${token}`;
+    return `${BASE_URL}/auth/gmail/authorize?session_id=${currentSessionId}&token=${token}`;
+}
+
+/**
+ * Get current session ID (for debugging)
+ */
+export function getCurrentSessionId(): string | null {
+    return currentSessionId;
+}
+
+/**
+ * Get current joined room (for debugging)
+ */
+export function getCurrentJoinedRoom(): string | null {
+    return currentJoinedRoom;
 }

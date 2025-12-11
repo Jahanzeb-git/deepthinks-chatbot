@@ -386,8 +386,8 @@
               {#if message.toolCalls && message.toolCalls[partIdx]}
                 {#if message.toolCalls[partIdx].name === 'email_tool'}
                   <EmailToolUI 
+                    messageId={message.id}
                     query={message.toolCalls[partIdx].query}
-                    isActive={true}
                   />
                 {:else}
                   <WebSearchUI 
@@ -407,8 +407,8 @@
               {#if message.toolCalls && message.toolCalls[partIdx]}
                 {#if message.toolCalls[partIdx].name === 'email_tool'}
                   <EmailToolUI 
+                    messageId={message.id}
                     query={message.toolCalls[partIdx].query}
-                    isActive={true}
                   />
                 {:else}
                   <WebSearchUI 

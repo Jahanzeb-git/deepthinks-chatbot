@@ -19,7 +19,7 @@
   import { derived, get } from 'svelte/store';
   import { StreamProcessor } from './lib/stream-processor';
   import { shouldShowBootUI, updateLastChatRequestTime, CONTAINER_CONFIG } from './stores/containerTimer';
-  import { connectEmailSocket, disconnectEmailSocket } from './lib/emailSocket';
+  import { connectEmailSocket, disconnectEmailSocket, joinEmailRoomForSession } from './lib/emailSocket';
   import { emailToolStore } from './stores/emailTool';
 
   import Sidebar from './components/Sidebar.svelte';
@@ -56,6 +56,13 @@
   
   $: theme = $themeStore;
   $: isInitialState = $chatStore.isInitialState;
+
+  // Reactive: Join email tool room when session changes
+  // This ensures we're always in the correct room for receiving events
+  $: if ($sessionStore.currentSession && $authStore.isAuthenticated) {
+    console.log('📧 Session changed, joining room for session:', $sessionStore.currentSession);
+    joinEmailRoomForSession($sessionStore.currentSession.toString());
+  }
 
   let touchStartX = 0;
   let touchEndX = 0;
@@ -240,6 +247,7 @@
     isSharedView = false;
     history.pushState({}, '', '/');
     chatStore.clearMessages();
+    emailToolStore.clearAll(); // Clear email tool states for new conversation
     chatStore.setCreatingNewConversation(true);
     
     if ($authStore.isAuthenticated) {
@@ -253,6 +261,9 @@
   async function handleSelectHistory(event: CustomEvent<{ sessionNumber: number }>) {
     isSharedView = false;
     const { sessionNumber } = event.detail;
+    
+    // Clear email tool states when switching sessions
+    emailToolStore.clearAll();
     
     try {
       sessionStore.setCurrentSession(sessionNumber);
@@ -273,6 +284,8 @@
   function handleLogout() {
     authStore.logout();
     chatStore.clearMessages();
+    emailToolStore.clearAll(); // Clear email tool states
+    disconnectEmailSocket(); // Disconnect email socket
     historyStore.setHistory([]);
     unauthenticatedSessionId = generateSessionId();
   }
