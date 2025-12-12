@@ -23,6 +23,41 @@
     return renderMath(node);
   }
 
+  // Helper function to highlight code with proper language detection
+  function highlightUserCode(code: string, language: string): string {
+    try {
+      // If language is plaintext or empty, try auto-detection
+      if (!language || language === 'plaintext' || language === 'text') {
+        const result = hljs.highlightAuto(code);
+        return result.value;
+      }
+      // Otherwise use the specified language
+      return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+    } catch (e) {
+      // Fallback to auto-detection if specified language fails
+      try {
+        return hljs.highlightAuto(code).value;
+      } catch {
+        // Last resort: return escaped code
+        return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    }
+  }
+
+  // Helper to get display language (auto-detect if needed)
+  function getDisplayLanguage(code: string, language: string): string {
+    if (!language || language === 'plaintext' || language === 'text') {
+      try {
+        const result = hljs.highlightAuto(code);
+        if (result.language && result.relevance > 5) {
+          return result.language.toUpperCase();
+        }
+      } catch {}
+      return 'CODE';
+    }
+    return language.toUpperCase();
+  }
+
   interface FileMetadata {
     id: string;
     original_name: string;
@@ -308,8 +343,8 @@
             <pre class="user-message-text">{segment.content}</pre>
           {:else if segment.type === 'code'}
             <div class="user-code-block">
-              <div class="user-code-language">{segment.language}</div>
-              <pre class="user-code-content"><code class="hljs language-{segment.language}">{@html hljs.highlight(segment.content, { language: segment.language, ignoreIllegals: true }).value}</code></pre>
+              <div class="user-code-language">{getDisplayLanguage(segment.content, segment.language || '')}</div>
+              <pre class="user-code-content"><code class="hljs">{@html highlightUserCode(segment.content, segment.language || '')}</code></pre>
             </div>
           {/if}
         {/each}
@@ -644,8 +679,15 @@
     margin: 0.75rem 0;
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid var(--border-color);
-    background: var(--hover-color);
+    /* Subtle border that works with user bubble background */
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    /* Use same background as user bubble - inherits from parent */
+    background: transparent;
+  }
+
+  /* Dark mode border adjustment */
+  :global([data-theme="dark"]) .user-code-block {
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .user-code-language {
@@ -654,10 +696,17 @@
     font-weight: 600;
     text-transform: uppercase;
     color: var(--text-muted);
-    background: var(--surface-color);
-    border-bottom: 1px solid var(--border-color);
+    /* Match user bubble bg with subtle darkening for visual hierarchy */
+    background: rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     letter-spacing: 0.05em;
     font-family: 'Courier New', monospace;
+  }
+
+  /* Dark mode: subtle lightening instead of darkening */
+  :global([data-theme="dark"]) .user-code-language {
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
   }
 
   .user-code-content {
@@ -700,12 +749,19 @@
     margin-top: 0.5rem;
   }
 
-  .user-code-block {
-    background: transparent !important;  /* remove mismatched container background */
-    padding: 0 !important;               /* avoid extra gray padding */
+  /* Code content area styling */
+  .user-code-content code {
+    /* Inherit text color from theme */
+    color: var(--text-color);
   }
 
-  .user-code {
-    background: var(--user-bubble-bg) !important;  /* make code block match bubble */
+  /* Override global hljs background for user code blocks */
+  .user-code-content code.hljs {
+    background: transparent !important;
+  }
+
+  /* Also override the pre element background */
+  .user-code-content {
+    background: transparent !important;
   }
 </style>

@@ -101,16 +101,82 @@
 
   // ==================== LANGUAGE DETECTION ====================
   function detectLanguage(code: string): string {
-    if (/^(import|export|const|let|var|function|class)\s/.test(code.trim())) {
-      if (/<[^>]+>/.test(code)) return 'jsx';
+    const trimmed = code.trim();
+    const lines = trimmed.split('\n');
+    
+    // Python-specific patterns (check FIRST - more specific)
+    const pythonPatterns = [
+      /^def\s+\w+\s*\(/m,           // def function_name(
+      /^class\s+\w+.*:/m,           // class ClassName:
+      /^\s*self\./m,                // self.
+      /^from\s+\w+\s+import/m,      // from x import
+      /^import\s+\w+/m,             // import x
+      /__init__|__name__|__main__/, // Python dunder methods
+      /:\s*$/m,                     // lines ending with :
+      /^\s*@\w+/m,                  // decorators like @wraps
+      /\.append\(|range\(|print\(|len\(/,  // Python built-ins
+    ];
+    
+    let pythonScore = 0;
+    pythonPatterns.forEach(pattern => {
+      if (pattern.test(trimmed)) pythonScore++;
+    });
+    
+    // Strong Python indicators
+    if (pythonScore >= 2) return 'python';
+    if (/^def\s/.test(trimmed) || /self\./.test(trimmed)) return 'python';
+    
+    // JavaScript/TypeScript patterns
+    const jsPatterns = [
+      /^(const|let|var)\s+\w+\s*=/m,
+      /^function\s+\w+\s*\(/m,
+      /=>\s*{/,
+      /\.then\(|async\s+function|await\s+/,
+      /console\.(log|error|warn)/,
+      /document\.|window\./,
+      /export\s+(default|const|function|class)/,
+      /require\(|import\s+.*\s+from/,
+    ];
+    
+    let jsScore = 0;
+    jsPatterns.forEach(pattern => {
+      if (pattern.test(trimmed)) jsScore++;
+    });
+    
+    if (jsScore >= 2) {
+      if (/<[^>]+>/.test(trimmed)) return 'jsx';
       return 'javascript';
     }
-    if (/^(def|import|class|if|for|while)\s/.test(code.trim())) return 'python';
-    if (/^(public|private|class|void|int|String)\s/.test(code.trim())) return 'java';
-    if (/<[^>]+>.*<\/[^>]+>/.test(code)) return 'html';
-    if (/\{[^}]*:[^}]*\}/.test(code)) return 'css';
+    
+    // Java patterns
+    if (/^(public|private|protected)\s+(static\s+)?(void|int|String|class)/.test(trimmed)) {
+      return 'java';
+    }
+    
+    // HTML patterns
+    if (/^\s*<(!DOCTYPE|html|head|body|div|span|p)/.test(trimmed)) return 'html';
+    
+    // CSS patterns  
+    if (/^\s*[.#]?\w+\s*\{[^}]*\}/.test(trimmed)) return 'css';
+    
+    // Fallback: check for common Python vs JS distinguishers
+    if (/True|False|None|elif/.test(trimmed)) return 'python';
+    if (/true|false|null|undefined|===|!==/.test(trimmed)) return 'javascript';
     
     return 'plaintext';
+  }
+
+  // ==================== STRIP HTML TAGS ====================
+  function stripHtmlTags(text: string): string {
+    // Remove HTML tags but preserve content
+    return text
+      .replace(/<[^>]*>/g, '')           // Remove all HTML tags
+      .replace(/&lt;/g, '<')              // Decode HTML entities
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
   }
 
   // ==================== MARKDOWN PARSER ====================
@@ -161,7 +227,10 @@
   function handlePaste(e: ClipboardEvent, blockId: string) {
     e.preventDefault();
     
-    const text = e.clipboardData?.getData('text/plain');
+    // Get plain text and strip any HTML tags that might have snuck in
+    let text = e.clipboardData?.getData('text/plain') || '';
+    text = stripHtmlTags(text);
+    
     if (!text) return;
     
     if (isCode(text)) {
