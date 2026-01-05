@@ -1,48 +1,104 @@
 import { writable, get } from 'svelte/store';
-import { api } from '../lib/api';
 import { authStore } from './auth';
 
-export interface TokenUsage {
-  timestamp: number;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
+export interface TimeseriesEntry {
+  date: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
 }
 
+export interface AnalyticsSummary {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  total_interactions: number;
+}
+
+export interface AnalyticsData {
+  timeseries: TimeseriesEntry[];
+  summary: AnalyticsSummary;
+}
+
+export interface AnalyticsState {
+  isAnalyticsModalOpen: boolean;
+  isLoading: boolean;
+  error: string | null;
+  data: AnalyticsData | null;
+  period: '7d' | '30d' | '90d' | 'all';
+  groupBy: 'day' | 'week' | 'month';
+}
+
+const BASE_URL = 'https://chatbot-backend-wandering-shadow-534.fly.dev';
+
 function createAnalyticsStore() {
-  const { subscribe, set, update } = writable({
+  const { subscribe, set, update } = writable<AnalyticsState>({
     isAnalyticsModalOpen: false,
-    tokenUsage: [] as TokenUsage[],
+    isLoading: false,
+    error: null,
+    data: null,
+    period: '30d',
+    groupBy: 'day',
   });
 
-  function saveUsageToStorage(usage: TokenUsage[]) {
-    localStorage.setItem('tokenUsage', JSON.stringify(usage));
-  }
+  async function fetchAnalytics(period: '7d' | '30d' | '90d' | 'all', groupBy: 'day' | 'week' | 'month') {
+    const token = localStorage.getItem('deepthinks_token');
+    const userStr = localStorage.getItem('deepthinks_user');
 
-  async function syncAnalytics() {
-    const auth = get(authStore);
-    // First, reset everything to ensure a clean slate.
-    localStorage.removeItem('tokenUsage');
-    update(state => ({ ...state, tokenUsage: [] }));
+    if (!token || !userStr) {
+      update(state => ({ ...state, error: 'Not authenticated', isLoading: false }));
+      return;
+    }
+
+    let email: string;
+    try {
+      const user = JSON.parse(userStr);
+      email = user.email;
+    } catch {
+      update(state => ({ ...state, error: 'Invalid user data', isLoading: false }));
+      return;
+    }
+
+    update(state => ({ ...state, isLoading: true, error: null }));
 
     try {
-      // Fetch the full history for the active key, not just recent.
-      const response = await api.getTokenUsage(auth.activeApiKeyIdentifier);
-      if (response.ok && response.items) {
-        const newUsage = response.items.map((item: any) => ({
-          timestamp: item.timestamp,
-          model: item.model,
-          inputTokens: item.inputTokens,
-          outputTokens: item.outputTokens,
-        }));
+      const params = new URLSearchParams({
+        email,
+        period,
+        group_by: groupBy,
+      });
 
-        newUsage.sort((a, b) => a.timestamp - b.timestamp);
+      const response = await fetch(`${BASE_URL}/api/analytics?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-        saveUsageToStorage(newUsage);
-        update(state => ({ ...state, tokenUsage: newUsage }));
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch analytics');
       }
-    } catch (error) {
-      console.error('Failed to sync analytics from backend:', error);
+
+      if (result.ok && result.data) {
+        update(state => ({
+          ...state,
+          data: result.data,
+          isLoading: false,
+          error: null,
+        }));
+      } else {
+        throw new Error(result.error || 'Invalid response format');
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch analytics:', error);
+      update(state => ({
+        ...state,
+        error: error.message || 'Failed to fetch analytics',
+        isLoading: false,
+      }));
     }
   }
 
@@ -50,36 +106,46 @@ function createAnalyticsStore() {
     subscribe,
     openAnalyticsModal: () => {
       update(state => ({ ...state, isAnalyticsModalOpen: true }));
-      syncAnalytics(); // Always sync from a clean state when opening.
+      // Fetch with current period and groupBy
+      const currentState = get(analyticsStore);
+      fetchAnalytics(currentState.period, currentState.groupBy);
     },
     closeAnalyticsModal: () => update(state => ({ ...state, isAnalyticsModalOpen: false })),
-    addTokenUsage: async (model: string, inputTokens: number, outputTokens: number) => {
-      const auth = get(authStore);
-      const newUsage: TokenUsage = {
-        timestamp: Date.now(),
-        model,
-        inputTokens,
-        outputTokens,
-      };
-      
-      // Add to local state immediately for responsiveness
-      const currentState = get(analyticsStore);
-      const updatedUsage = [...currentState.tokenUsage, newUsage];
-      saveUsageToStorage(updatedUsage);
-      update(state => ({ ...state, tokenUsage: updatedUsage }));
 
-      try {
-        await api.postTokenUsage(newUsage, auth.activeApiKeyIdentifier);
-      } catch (error) {
-        console.error('Failed to post token usage to backend:', error);
-      }
+    setPeriod: (period: '7d' | '30d' | '90d' | 'all') => {
+      update(state => ({ ...state, period }));
+      const currentState = get(analyticsStore);
+      fetchAnalytics(period, currentState.groupBy);
+    },
+
+    setGroupBy: (groupBy: 'day' | 'week' | 'month') => {
+      update(state => ({ ...state, groupBy }));
+      const currentState = get(analyticsStore);
+      fetchAnalytics(currentState.period, groupBy);
+    },
+
+    refresh: () => {
+      const currentState = get(analyticsStore);
+      fetchAnalytics(currentState.period, currentState.groupBy);
+    },
+
+    // Backward-compatible methods for existing code
+    syncAnalytics: () => {
+      const currentState = get(analyticsStore);
+      fetchAnalytics(currentState.period, currentState.groupBy);
     },
 
     resetAnalytics: () => {
-      localStorage.removeItem('tokenUsage');
-      update(state => ({ ...state, tokenUsage: [] }));
+      // Reset local state
+      update(state => ({ ...state, data: null, error: null }));
     },
-    syncAnalytics,
+
+    // No-op: backend now tracks token usage automatically
+    addTokenUsage: async (_model: string, _inputTokens: number, _outputTokens: number) => {
+      // Token usage is now tracked by the backend automatically
+      // This method is kept for backward compatibility
+    },
+
     set,
   };
 }
