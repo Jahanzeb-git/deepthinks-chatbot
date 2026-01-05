@@ -12,6 +12,7 @@
   import { analyticsStore } from './stores/analytics';
   import { sessionUuidStore } from './stores/sessionUuid';
   import { shareStore } from './stores/share';
+  import { creditsStore } from './stores/credits';
   import { artifactStore } from './stores/artifact';
   import { fileStore } from './stores/file';
   import { api } from './lib/api';
@@ -30,6 +31,7 @@
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import AboutModal from './components/modals/AboutModal.svelte';
   import AnalyticsModal from './components/modals/AnalyticsModal.svelte';
+  import CreditsModal from './components/modals/CreditsModal.svelte';
   import ShareModal from './components/modals/ShareModal.svelte';
   import PasswordPromptModal from './components/modals/PasswordPromptModal.svelte';
   import Welcome from './components/presentation/Welcome.svelte';
@@ -709,6 +711,9 @@ async function submitPrompt(message: string, reason: 'default' | 'reason' | 'cod
     {/if}
     {#if $analyticsStore.isAnalyticsModalOpen}
       <AnalyticsModal />
+    {/if}
+    {#if $creditsStore.isCreditsModalOpen}
+      <CreditsModal />
     {/if}
     {#if $shareStore.isShareModalOpen}
       <ShareModal />

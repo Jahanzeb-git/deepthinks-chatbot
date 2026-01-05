@@ -4,6 +4,7 @@
   import { authStore, type User } from '../stores/auth';
   import { settingsStore } from '../stores/settings';
   import { analyticsStore } from '../stores/analytics';
+  import { creditsStore } from '../stores/credits';
   import { DollarSign, Settings, BarChart2, LogOut, User as UserIcon, Edit } from 'lucide-svelte';
 
   export let user: User;
@@ -68,10 +69,10 @@
         </div>
       </div>
       <div class="menu-items">
-        <a href="/upgrade" class="menu-item">
+        <button class="menu-item" on:click={() => { menuOpen = false; creditsStore.openCreditsModal(); }}>
           <DollarSign size={16} />
-          <span>Upgrade Plan</span>
-        </a>
+          <span>Credits</span>
+        </button>
         <button class="menu-item" on:click={() => { menuOpen = false; settingsStore.openCustomizeModal(); }}>
           <Edit size={16} />
           <span>Customize Behavior</span>
